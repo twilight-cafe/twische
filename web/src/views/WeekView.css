@@ -1,0 +1,377 @@
+.week {
+  padding-bottom: 8px;
+}
+
+.range {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.nav-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--mut);
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+}
+.nav-btn:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+/* ── 图例：把"形状即语义"这条规则明确告诉用户 ── */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--mut);
+}
+
+.legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend__bar {
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--fg);
+}
+
+.legend__dot {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--fg);
+  border-radius: 50%;
+}
+
+.legend__now {
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dusk);
+}
+
+.legend__hint {
+  margin-left: auto;
+  color: var(--faint);
+}
+
+.week__scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+}
+
+.grid {
+  min-width: 720px;
+}
+
+/* ── 表头 ── */
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 52px repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--bg);
+}
+
+.head__corner {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 6px;
+  font-size: 10px;
+}
+
+.head__day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border-left: 1px solid var(--line);
+}
+.head__day.is-weekend {
+  background: var(--softer);
+}
+
+.head__wd {
+  font-size: 12px;
+  color: var(--mut);
+}
+
+.head__num {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.head__num.is-today {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--acc);
+  color: var(--on-acc);
+  font-size: 14px;
+}
+
+.head__badge {
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--hover);
+  font-size: 10.5px;
+  line-height: 17px;
+  text-align: center;
+  color: var(--mut);
+}
+
+/* ── 全天行 ── */
+.allday {
+  display: grid;
+  grid-template-columns: 52px repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+  background: var(--softer);
+}
+
+.allday__label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.allday__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 26px;
+  padding: 3px;
+  border-left: 1px solid var(--line);
+}
+
+.allday__chip {
+  padding: 1px 5px;
+  border-left: 2px solid var(--fg);
+  border-radius: 2px;
+  background: var(--bg);
+  font-size: 11.5px;
+  color: var(--fg);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.allday__chip.is-done {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+.allday__chip.is-overdue {
+  border-left-color: var(--dusk);
+  color: var(--dusk);
+}
+
+/* ── 网格主体 ── */
+.body {
+  display: grid;
+  grid-template-columns: 52px repeat(7, minmax(0, 1fr));
+}
+
+.gutter {
+  display: flex;
+  flex-direction: column;
+}
+
+.gutter__tick {
+  position: relative;
+  flex: none;
+}
+
+.gutter__label {
+  position: absolute;
+  top: -7px;
+  right: 7px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.gutter__tick:first-child .gutter__label {
+  top: 2px;
+}
+
+.col {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  cursor: copy;
+  /* 每小时一条横线；用渐变画比铺 24 个 div 便宜得多 */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--line) 0 1px,
+    transparent 1px var(--hour-h)
+  );
+}
+.col.is-weekend {
+  background-color: var(--softer);
+}
+.col.is-today {
+  background-color: color-mix(in srgb, var(--fg) 4%, var(--bg));
+}
+
+/* ── 日程块 ── */
+.block {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 5px;
+  border: none;
+  border-left: 3px solid var(--fg);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--fg) 12%, var(--bg));
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.14s var(--ease), box-shadow 0.14s var(--ease);
+}
+.block:hover {
+  background: color-mix(in srgb, var(--fg) 20%, var(--bg));
+  box-shadow: 0 2px 8px -4px color-mix(in srgb, var(--fg) 45%, transparent);
+}
+
+.block__title {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.block__time {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--mut);
+  letter-spacing: -0.03em;
+}
+
+.block__spill {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 9.5px;
+  color: var(--faint);
+}
+
+/* 截止时间：左侧改成空心圆点 + 上方虚线，与"占据一段时长"的实心块区分 */
+.block--deadline {
+  justify-content: center;
+  border-left: none;
+  border-top: 1.5px dashed var(--fg);
+  border-radius: 0;
+  background: transparent;
+  padding-top: 3px;
+}
+.block--deadline:hover {
+  background: var(--hover);
+}
+.block--deadline::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: -4px;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--fg);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.block.is-done {
+  opacity: 0.5;
+}
+.block.is-done .block__title {
+  text-decoration: line-through;
+}
+
+.block.is-overdue {
+  border-left-color: var(--dusk);
+  background: var(--dusk-soft);
+}
+.block.is-overdue .block__title {
+  color: var(--dusk);
+}
+.block--deadline.is-overdue::before {
+  border-color: var(--dusk);
+}
+.block--deadline.is-overdue {
+  border-top-color: var(--dusk);
+}
+
+.block.is-spill {
+  border-bottom: 1.5px dotted var(--line-strong);
+}
+
+/* ── 当前时刻线 ── */
+.nowline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 1.5px;
+  background: var(--dusk);
+  pointer-events: none;
+}
+
+.nowline__dot {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dusk);
+}
+
+.foot-hint {
+  margin-top: 10px;
+  font-size: 11.5px;
+}
+
+@media (max-width: 767px) {
+  .legend__hint {
+    display: none;
+  }
+  .grid {
+    min-width: 660px;
+  }
+  .head,
+  .allday,
+  .body {
+    grid-template-columns: 44px repeat(7, minmax(88px, 1fr));
+  }
+  .foot-hint {
+    display: none;
+  }
+}

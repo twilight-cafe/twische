@@ -1,0 +1,235 @@
+.rb {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rb__row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.rb__row--top {
+  align-items: flex-start;
+}
+.rb__row--top > .label {
+  padding-top: 9px;
+}
+
+.rb__inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rb__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.rb__end-extra {
+  max-width: 220px;
+}
+
+.rb__hint {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+/* ── 星期 ── */
+.rb__weekdays {
+  display: flex;
+  gap: 5px;
+}
+.wd {
+  width: 36px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--mut);
+  transition: background 0.14s var(--ease), color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+.wd:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.wd.is-on,
+.wd.is-on:hover {
+  background: var(--acc);
+  color: var(--on-acc);
+  border-color: var(--acc);
+  font-weight: 500;
+}
+
+.rb__quick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+}
+.rb__quick--flat {
+  margin-top: 0;
+}
+
+.rb__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--ok);
+}
+.rb__tag--dusk {
+  color: var(--dusk);
+}
+
+/* ── 时段 ── */
+.rb__time {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.rb__time-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rb__slot {
+  flex: 0 1 116px;
+  min-width: 96px;
+}
+.rb__arrow {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+.rb__dur {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mut);
+}
+
+/* ── 日期 / 月份网格 ── */
+.rb__days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  max-width: 300px;
+}
+.rb__days .cell {
+  height: 30px;
+}
+
+.rb__months {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 3px;
+  max-width: 300px;
+}
+.rb__months .cell {
+  height: 30px;
+}
+
+.rb__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin-top: 9px;
+  max-width: 420px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--dusk);
+}
+
+.rb__exdate-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rb__exdate-add > :first-child {
+  flex: 0 1 190px;
+  min-width: 150px;
+}
+
+.rb__exdates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+/* ── 预览 ── */
+.rb__preview {
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--soft);
+}
+
+.rb__preview-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.rb__preview-dates {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--mut);
+}
+
+.rb__date {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .rb__row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+  .rb__row--top > .label {
+    padding-top: 0;
+  }
+  .rb__weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+  }
+  .wd {
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+  }
+  .rb__days,
+  .rb__months {
+    max-width: none;
+  }
+  .rb__days .cell,
+  .rb__months .cell {
+    height: 36px;
+  }
+  .rb__slot {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .rb__dur {
+    flex: 1 1 100%;
+  }
+}

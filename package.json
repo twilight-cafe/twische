@@ -1,0 +1,24 @@
+{
+  "name": "twische",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Twische — 一个自托管的日程管理工具（Web + PWA），支持固定重复时段与精确截止时间，多端向量时钟同步。",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "postinstall": "npm --prefix web install",
+    "init": "go run ./server init",
+    "dev": "npm --prefix web run dev",
+    "dev:server": "go run ./server serve --port 8787",
+    "dev:web": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "start": "go run ./server serve",
+    "twische": "go run ./server",
+    "test": "node --test shared/test/*.test.js",
+    "test:server": "go test ./server/...",
+    "test:shared": "node --test shared/test/*.test.js",
+    "typecheck": "npm --prefix web run typecheck"
+  }
+}

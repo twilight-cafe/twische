@@ -1,0 +1,315 @@
+.tasks-view {
+  padding-bottom: 8px;
+}
+
+/* ── 工具条 ── */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1 1 220px;
+  min-width: 180px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--faint);
+  background: var(--bg);
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.search:focus-within {
+  border-color: var(--fg);
+  background: var(--soft);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 14px;
+}
+.search input:focus {
+  outline: none;
+  border: none;
+  background: none;
+}
+/* 去掉 search 类型自带的清除叉，避免和自绘的重复 */
+.search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search__clear {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: var(--faint);
+}
+.search__clear:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.tag-select {
+  width: auto;
+  min-width: 108px;
+  min-height: 36px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--mut);
+  white-space: nowrap;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+.toggle:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.toggle.is-on {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--on-acc);
+}
+
+.clear {
+  margin-left: auto;
+}
+
+/* ── 列表 ── */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 12px;
+  padding: 12px 12px 12px 10px;
+  border-radius: var(--radius);
+  transition: background 0.14s var(--ease);
+}
+.row:hover {
+  background: var(--softer);
+}
+
+.row.is-archived {
+  opacity: 0.62;
+}
+
+/* 与日程实例用同一套形状语义：实心条 = 固定时段，空心点 = 截止 */
+.row__mark {
+  grid-row: 1 / -1;
+  width: 3px;
+  height: 100%;
+  min-height: 20px;
+  margin-top: 3px;
+  border-radius: 2px;
+  background: var(--fg);
+}
+.row[data-kind='deadline'] .row__mark {
+  width: 8px;
+  height: 8px;
+  min-height: 0;
+  margin-top: 7px;
+  border: 1.5px solid var(--fg);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.row__main {
+  min-width: 0;
+}
+
+.row__line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.row__title {
+  min-width: 0;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row__pri {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg);
+}
+.row__pri[data-p='2'] {
+  width: 7px;
+  height: 7px;
+  background: var(--dusk);
+}
+
+/* 与编辑器里的用词保持一致：普通 / 重要 / 紧急。
+   只靠圆点大小区分，用户没法知道那个点代表什么。 */
+.row__pri-text {
+  flex: none;
+  font-size: 11px;
+  color: var(--mut);
+  letter-spacing: 0.02em;
+}
+.row__pri-text[data-p='2'] {
+  color: var(--dusk);
+}
+
+.row__badge {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--faint);
+}
+
+.row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--mut);
+}
+
+.row__next {
+  font-variant-numeric: tabular-nums;
+}
+.row__next.is-overdue {
+  color: var(--dusk);
+  font-weight: 500;
+}
+
+.row__sep {
+  color: var(--line-strong);
+}
+
+.row__rule {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+}
+
+.row__notes {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--mut);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.row__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+/* ── 行内操作：默认淡出，悬停/聚焦时显现，让列表本身保持安静 ── */
+.row__actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+  opacity: 0;
+  transition: opacity 0.14s var(--ease);
+}
+.row:hover .row__actions,
+.row:focus-within .row__actions {
+  opacity: 1;
+}
+
+.act {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius);
+  color: var(--mut);
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+}
+.act:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.act--danger:hover {
+  background: var(--dusk-soft);
+  color: var(--dusk);
+}
+
+.foot {
+  margin-top: 12px;
+  font-size: 11.5px;
+}
+
+/* 触屏设备没有 hover，操作按钮必须常驻可见 */
+@media (hover: none) {
+  .row__actions {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 767px) {
+  .row {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 10px;
+    padding: 11px 8px;
+  }
+  .row__actions {
+    grid-column: 2;
+    margin-top: 8px;
+    opacity: 1;
+    border-top: 1px dashed var(--line);
+    padding-top: 6px;
+  }
+  .clear {
+    margin-left: 0;
+  }
+  .search {
+    flex: 1 1 100%;
+  }
+}

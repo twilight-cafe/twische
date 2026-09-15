@@ -1,0 +1,40 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# 运行期数据：SQLite 数据库与 WAL 附属文件绝不入库
+data/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+.backup/
+.gocache
+.gotmp
+.shots
+
+# 本地环境覆盖
+.env
+.env.local
+*.exe
+
+# 构建产物
+release/
+
+# 构建产物
+release/
+
+
+# --- AI Agent 工作目录 ---
+.workbuddy/
+.claude/
+.codebuddy/
+.cursor/
+.copilot/
+.aider*
+.gemini/
+.trae/
+.windsurf/
+.continue/
+.serena/

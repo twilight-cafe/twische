@@ -1,0 +1,175 @@
+.oi {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: start;
+  gap: 0 10px;
+  padding: 9px 10px 9px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.14s var(--ease);
+}
+.oi:hover {
+  background: var(--hover);
+}
+.oi:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: -2px;
+}
+
+.oi--compact {
+  padding: 3px 5px;
+  gap: 0 6px;
+}
+
+/* 完成打卡 */
+.oi__check {
+  grid-row: 1 / -1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--on-acc);
+  transition: border-color 0.14s var(--ease), background 0.14s var(--ease);
+}
+.oi__check:hover {
+  border-color: var(--fg);
+}
+.oi.is-done .oi__check {
+  background: var(--acc);
+  border-color: var(--acc);
+}
+.oi--compact .oi__check {
+  width: 14px;
+  height: 14px;
+  margin-top: 0;
+}
+
+/* 形状区分：固定时段是实心竖条，截止时间是圆点 */
+.oi__rule {
+  grid-row: 1 / -1;
+  width: 3px;
+  height: 100%;
+  min-height: 18px;
+  margin-top: 1px;
+  border-radius: 2px;
+  background: var(--fg);
+}
+.oi[data-kind='deadline'] .oi__rule {
+  width: 7px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--fg);
+  justify-self: center;
+}
+.oi.is-done .oi__rule {
+  opacity: 0.35;
+}
+.oi--compact .oi__rule {
+  width: 2px;
+  min-height: 12px;
+}
+
+.oi__body {
+  min-width: 0;
+}
+
+.oi__line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.oi__time {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--mut);
+  letter-spacing: -0.02em;
+}
+
+.oi__date {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.oi__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oi--compact .oi__title {
+  font-size: 12.5px;
+}
+
+.oi.is-done .oi__title {
+  color: var(--faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--line-strong);
+}
+
+/* 优先级：用实心点的大小区分，不额外引入颜色 */
+.oi__pri {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fg);
+}
+.oi__pri[data-p='2'] {
+  width: 7px;
+  height: 7px;
+  background: var(--dusk);
+}
+
+.oi__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.oi__dur {
+  font-variant-numeric: tabular-nums;
+}
+
+.oi__flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--mut);
+}
+
+.oi__overdue {
+  color: var(--dusk);
+  font-weight: 500;
+}
+.oi__overdue--inline {
+  margin-top: 1px;
+  font-size: 11px;
+}
+
+.oi__tag {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--mut);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.oi.is-overdue .oi__time {
+  color: var(--dusk);
+}

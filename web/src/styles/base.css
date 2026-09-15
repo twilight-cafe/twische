@@ -1,0 +1,588 @@
+/* 基础层：重置、排版、表单控件、通用原子类。 */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  /* 移动端点击高亮由我们自己控制 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 桌面端锁滚动、内部区域自滚；移动端允许页面滚动 */
+  overscroll-behavior-y: none;
+}
+
+/* 数字与时间一律等宽，避免倒计时/时间轴的字符宽度跳动 */
+.tnum,
+input[type="time"],
+input[type="date"],
+input[type="datetime-local"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--serif);
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: clamp(26px, 3.4vw, 38px);
+}
+h2 {
+  font-size: clamp(19px, 2.2vw, 24px);
+}
+h3 {
+  font-size: 16px;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+a:hover {
+  text-decoration-color: var(--fg);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* 尊重"减少动态效果"偏好。对偏头痛与前庭障碍用户是硬需求。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ───────── 表单控件：统一为极简描边风格 ───────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field > label,
+.label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--mut);
+  font-weight: 500;
+}
+
+.input,
+input[type="text"],
+input[type="password"],
+input[type="time"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+
+textarea {
+  min-height: 84px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.input:hover,
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--faint);
+}
+
+.input:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--fg);
+  background: var(--soft);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--faint);
+}
+
+/* 关掉 number 的上下箭头：日程场景里从不需要 */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* 让原生日期/时间选择器在暗色下也可用 */
+html[data-mode="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+html[data-mode="dark"] input[type="time"]::-webkit-calendar-picker-indicator,
+html[data-mode="dark"] input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+/* ───────── 按钮 ───────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease),
+    color 0.15s var(--ease), opacity 0.15s var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--faint);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--soft);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--acc);
+  color: var(--on-acc);
+  border-color: var(--acc);
+}
+.btn--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--acc) 84%, var(--bg));
+  border-color: color-mix(in srgb, var(--acc) 84%, var(--bg));
+}
+
+.btn--ghost {
+  border-color: transparent;
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: transparent;
+}
+
+.btn--danger {
+  color: var(--dusk);
+  border-color: color-mix(in srgb, var(--dusk) 40%, var(--bg));
+}
+.btn--danger:hover:not(:disabled) {
+  background: var(--dusk-soft);
+  border-color: var(--dusk);
+}
+
+.btn--sm {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.btn--block {
+  width: 100%;
+}
+
+/* ───────── 分段控件 ─────────
+   放在全局层而不是某个组件的 scoped 里：类型切换、优先级、列表筛选、
+   重复频率都在用它。定义在组件内时，别的组件只能拿到一串"没有样式的类名"，
+   渲染出来就是几段裸文字 —— 这正是弹窗里最显眼的两个控件曾经的样子。 */
+
+.seg {
+  display: inline-flex;
+  max-width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* 表单列（.field）里默认会被拉伸成整行，分段控件应当只占内容宽度 */
+.field > .seg {
+  align-self: flex-start;
+}
+
+.seg__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 13.5px;
+  color: var(--mut);
+  white-space: nowrap;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+}
+
+.seg__item + .seg__item {
+  border-left: 1px solid var(--line);
+}
+
+.seg__item:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.seg__item.is-on,
+.seg__item.is-on:hover {
+  background: var(--acc);
+  color: var(--on-acc);
+  font-weight: 500;
+}
+
+.seg--sm .seg__item {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+/* 撑满整行的分段控件（类型切换这类"一等选择"） */
+.seg--block {
+  display: flex;
+  width: 100%;
+}
+.seg--block .seg__item {
+  flex: 1;
+  min-height: 40px;
+}
+
+/* ───────── 计数步进器 ─────────
+   全站关掉了 number 的原生上下箭头（那些箭头在日程场景里既小又难按），
+   所以凡是"数量"都补一对明确的 − / + 。 */
+
+.stepper {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.stepper__btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-height: 36px;
+  color: var(--mut);
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+}
+.stepper__btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--fg);
+}
+.stepper__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.stepper > input {
+  width: 56px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 2px;
+  border: none;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.stepper > input:hover,
+.stepper > input:focus {
+  border-color: var(--line);
+  background: var(--soft);
+}
+
+/* ───────── 浮层（自定义日期 / 时间选择器） ───────── */
+
+.pop-layer {
+  position: fixed;
+  z-index: 72;
+}
+
+.pop-panel {
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: 0 20px 48px -20px color-mix(in srgb, var(--fg) 45%, transparent);
+}
+
+.pop-enter-active,
+.pop-leave-active {
+  transition: opacity 0.16s var(--ease), transform 0.16s var(--ease);
+}
+.pop-enter-from,
+.pop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pop-title {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.pop-label {
+  margin: 10px 0 6px;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
+.pop-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+/* 网格里的小格子：日期、小时、分钟共用一套形状语义 */
+.cell {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--mut);
+  transition: background 0.12s var(--ease), color 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+.cell:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.cell.is-on,
+.cell.is-on:hover {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--on-acc);
+  font-weight: 500;
+}
+.cell--mute {
+  color: var(--faint);
+}
+.cell--today {
+  border-color: var(--line-strong);
+  color: var(--fg);
+}
+
+/* ───────── 通用容器 ───────── */
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.divider {
+  height: 1px;
+  background: var(--line);
+  border: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--mut);
+  white-space: nowrap;
+}
+
+/* 可点击 / 可勾选的胶囊。与 .cell、.seg__item 共用同一套选中语义。 */
+.chip--btn {
+  cursor: pointer;
+  transition: background 0.14s var(--ease), color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+.chip--btn:hover {
+  background: var(--hover);
+  color: var(--fg);
+  border-color: var(--line-strong);
+}
+.chip--btn.is-on,
+.chip--btn.is-on:hover {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--on-acc);
+}
+
+.chip--on {
+  border-color: var(--line-strong);
+  color: var(--fg);
+  padding-right: 5px;
+}
+
+.chip__x {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  color: var(--faint);
+}
+.chip__x:hover {
+  background: var(--line);
+  color: var(--fg);
+}
+
+.mut {
+  color: var(--mut);
+}
+.faint {
+  color: var(--faint);
+}
+.mono {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 滚动条：细、低调、不抢视线 */
+.scroll {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+.scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+.scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--faint);
+}
+
+/* ───────── 进场动效 ───────── */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.enter {
+  animation: fade-up 0.28s var(--ease) both;
+}

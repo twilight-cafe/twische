@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="10" fill="#151515"/>
+  <!-- 衬线 T：横梁 -->
+  <rect x="15.2" y="18.1" width="33.6" height="5" fill="#ffffff"/>
+  <!-- 主竖笔 -->
+  <rect x="28.4" y="22.5" width="7.2" height="22.3" fill="#ffffff"/>
+  <!-- 底脚衬线 -->
+  <rect x="21.5" y="44.3" width="7.6" height="3.7" fill="#ffffff"/>
+  <rect x="34.9" y="44.3" width="7.6" height="3.7" fill="#ffffff"/>
+  <!-- 暮色圆点 -->
+  <circle cx="46.3" cy="46.2" r="2.8" fill="#a8492c"/>
+</svg>

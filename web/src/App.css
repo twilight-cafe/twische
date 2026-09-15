@@ -1,0 +1,137 @@
+/* 应用根：启动态、致命错误、更新提示条、页面切换。 */
+
+.app {
+  height: 100%;
+}
+
+/* ── 启动态 ── */
+.boot {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  height: 100dvh;
+}
+
+.boot__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background: var(--acc);
+  color: var(--on-acc);
+  animation: pulse 1.6s var(--ease) infinite;
+}
+
+.boot__t {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 1;
+  transform: translateY(-2px);
+}
+
+.boot__dot {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dusk);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.boot__text {
+  font-size: 13px;
+  color: var(--mut);
+  letter-spacing: 0.04em;
+}
+
+/* ── 致命错误 ── */
+.fatal {
+  display: grid;
+  place-content: center;
+  min-height: 100dvh;
+  padding: 24px;
+}
+
+.fatal__box {
+  max-width: 30rem;
+  text-align: center;
+}
+
+.fatal__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--dusk);
+}
+
+.fatal__title {
+  font-size: 22px;
+}
+
+.fatal__msg {
+  margin-top: 10px;
+  color: var(--mut);
+  line-height: 1.7;
+}
+
+.fatal__actions {
+  margin-top: 22px;
+  display: flex;
+  justify-content: center;
+}
+
+.fatal__hint {
+  margin-top: 20px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.fatal__hint code {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--soft);
+}
+
+/* ── 更新提示 ── */
+.update-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg);
+  box-shadow: 0 12px 32px -14px color-mix(in srgb, var(--fg) 40%, transparent);
+  font-size: 13.5px;
+}
+
+@media (max-width: 767px) {
+  .update-bar {
+    bottom: calc(var(--shell-tabbar) + env(safe-area-inset-bottom) + 16px);
+  }
+}

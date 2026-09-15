@@ -1,0 +1,44 @@
+.ph {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.ph__main {
+  min-width: 0;
+}
+
+.ph__title {
+  font-size: clamp(24px, 3vw, 32px);
+}
+
+.ph__sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--mut);
+}
+
+.ph__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding-top: 4px;
+}
+
+@media (max-width: 767px) {
+  .ph {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .ph__actions {
+    padding-top: 0;
+  }
+  .ph__actions .btn {
+    flex: 1;
+  }
+}

@@ -1,0 +1,100 @@
+.auth {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.auth__card {
+  width: min(100%, 380px);
+  text-align: center;
+}
+
+.auth__mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 9px;
+  background: var(--acc);
+  color: var(--on-acc);
+}
+
+.auth__t {
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 28px;
+  line-height: 1;
+  transform: translateY(-2px);
+}
+
+.auth__dot {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dusk);
+}
+
+.auth__title {
+  margin-top: 20px;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+}
+
+.auth__sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--faint);
+  letter-spacing: 0.08em;
+}
+
+.auth__form {
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+
+.pw-wrap {
+  position: relative;
+}
+
+.pw-input {
+  padding-right: 40px;
+}
+
+.pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 3px;
+  color: var(--faint);
+}
+.pw-toggle:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--faint);
+  line-height: 1.5;
+}
+
+.auth__note {
+  margin-top: 26px;
+  font-size: 12px;
+  color: var(--faint);
+  line-height: 1.6;
+}

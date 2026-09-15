@@ -1,0 +1,129 @@
+.df {
+  display: flex;
+  min-width: 0;
+}
+
+.df__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  text-align: left;
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.df__trigger:hover:not(:disabled) {
+  border-color: var(--faint);
+}
+.df__trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.df__trigger[aria-expanded='true'] {
+  border-color: var(--fg);
+  background: var(--soft);
+}
+
+.df--dense .df__trigger {
+  min-height: 34px;
+}
+
+.df__value {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.df__tag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--soft);
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--mut);
+}
+
+.df__placeholder {
+  font-size: 14px;
+  color: var(--faint);
+}
+
+.df__caret {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+
+/* ── 浮层 ── */
+.df__panel {
+  width: 280px;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.df__nav {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
+  color: var(--mut);
+  transition: background 0.14s var(--ease), color 0.14s var(--ease);
+}
+.df__nav:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.df__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.df__grid--head {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--faint);
+  text-align: center;
+}
+.df__grid--head span {
+  line-height: 20px;
+}
+
+.df__day {
+  height: 32px;
+}
+
+.df__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.df__spacer {
+  flex: 1;
+}
+
+@media (max-width: 699px) {
+  .df__panel {
+    width: auto;
+  }
+  .df__day {
+    height: 38px;
+  }
+}
