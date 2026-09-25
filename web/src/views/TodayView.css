@@ -2,21 +2,6 @@
   padding-bottom: 8px;
 }
 
-.nav-btn {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  color: var(--mut);
-  transition: background 0.14s var(--ease), color 0.14s var(--ease);
-}
-.nav-btn:hover {
-  background: var(--hover);
-  color: var(--fg);
-}
-
 /* ── 分区标题 ── */
 .sec-head {
   display: flex;
@@ -48,21 +33,10 @@
 .sec-count {
   font-size: 11.5px;
   color: var(--faint);
+  white-space: nowrap;
 }
 
-.link-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--faint);
-  transition: color 0.14s var(--ease);
-}
-.link-btn:hover {
-  color: var(--fg);
-}
-
-/* ── 逾期区块：用一条竖线标出"这一块需要立刻处理" ── */
+/* ── 逾期区块 ── */
 .alert-block {
   margin-bottom: 22px;
   padding: 12px 14px 8px;
@@ -82,67 +56,143 @@
   gap: 1px;
 }
 
-.continuation,
-.all-day {
-  margin-bottom: 22px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--line);
+.today-pager {
+  margin-top: 6px;
+}
+.day-overdue {
+  margin: 6px 0 14px;
 }
 
+.day-empty {
+  padding: 8px 2px 12px;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+
+/* ── 时间线 / 日期分组 ── */
 .timeline {
   position: relative;
 }
 
-/* ── 当前时刻线 ── */
-.now-line {
+.feed {
   display: flex;
+  flex-direction: column;
+  min-height: 80px;
+}
+
+.day-block {
+  padding: 14px 0 6px;
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 14px;
+}
+
+.day-block:first-child {
+  border-top: none;
+}
+
+.day-block.is-today .day-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 4px 0 6px;
+  background: linear-gradient(var(--bg) 78%, transparent);
+}
+
+.day-head {
   align-items: center;
+}
+
+.day-head__main {
+  display: flex;
+  align-items: baseline;
   gap: 8px;
-  height: 22px;
-  margin: 2px 0;
+  min-width: 0;
 }
 
-.now-line__dot {
+.day-head .sec-title {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--fg);
+}
+
+.day-head__weekday {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+/* ── 无限滚动哨兵 ── */
+.feed-sentinel {
+  display: grid;
+  place-items: center;
   flex: none;
-  width: 7px;
-  height: 7px;
-  margin-left: 6px;
-  border-radius: 50%;
-  background: var(--dusk);
+  height: 34px;
 }
 
-.now-line__rule {
-  flex: 1;
-  height: 1px;
-  background: color-mix(in srgb, var(--dusk) 55%, transparent);
+.feed-sentinel:first-child {
+  margin-bottom: 2px;
 }
 
-.now-line__label {
-  flex: none;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dusk);
+.feed-fallback {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0;
 }
 
-/* ── 底部添加入口 ── */
-.add-row {
+.feed-boundary {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  width: 100%;
-  margin-top: 10px;
-  padding: 10px;
+  gap: 5px;
+  padding: 14px 0 4px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.feed-loading {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+}
+
+.feed-boundary--top {
+  padding: 4px 0 10px;
+}
+
+/* ── 空状态 ── */
+.today-empty {
+  padding: 48px 20px;
+}
+
+.today-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
   border: 1px dashed var(--line-strong);
-  border-radius: var(--radius);
+  border-radius: 50%;
+  color: var(--faint);
+}
+
+.today-empty__title {
+  margin-top: 4px;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.today-empty__hint {
+  max-width: 34ch;
+  margin-top: 4px;
   color: var(--faint);
   font-size: 13px;
-  transition: color 0.15s var(--ease), border-color 0.15s var(--ease), background 0.15s var(--ease);
+  line-height: 1.7;
 }
-.add-row:hover {
-  color: var(--fg);
-  border-color: var(--faint);
-  background: var(--soft);
+
+/* 仅用于触发随分钟重渲染，不参与视觉。 */
+.today__clock {
+  display: none;
 }
 
 @media (max-width: 767px) {
@@ -150,9 +200,7 @@
     padding: 10px 10px 6px;
     margin-bottom: 16px;
   }
-  .continuation,
-  .all-day {
-    margin-bottom: 16px;
-    padding-bottom: 14px;
+  .day-block {
+    padding-top: 12px;
   }
 }

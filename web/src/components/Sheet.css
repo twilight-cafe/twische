@@ -1,84 +1,7 @@
-.sheet-root {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-}
-
-.sheet-backdrop {
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--fg) 42%, transparent);
-  backdrop-filter: blur(2px);
-}
-
-.sheet-panel {
-  position: relative;
+.sheet-title-wrap {
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  color: var(--fg);
-  outline: none;
-}
-
-/* ── 桌面 / 平板：居中对话框 ── */
-@media (min-width: 700px) {
-  .sheet-root {
-    align-items: center;
-    justify-content: center;
-    padding: 32px 24px;
-  }
-  .sheet-panel {
-    width: min(100%, var(--sheet-width));
-    max-height: min(86vh, 860px);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 24px 60px -20px color-mix(in srgb, var(--fg) 34%, transparent);
-  }
-}
-
-/* ── 手机：底部抽屉 ── */
-@media (max-width: 699px) {
-  .sheet-root {
-    align-items: flex-end;
-  }
-  .sheet-panel {
-    width: 100%;
-    max-height: 92vh;
-    border-radius: 14px 14px 0 0;
-    border-bottom: none;
-    padding-bottom: env(safe-area-inset-bottom);
-    box-shadow: 0 -18px 48px -22px color-mix(in srgb, var(--fg) 40%, transparent);
-  }
-  /* 顶部小把手，提示可以下滑关闭 */
-  .sheet-panel::before {
-    content: '';
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 34px;
-    height: 4px;
-    border-radius: 999px;
-    background: var(--line-strong);
-  }
-}
-
-.sheet-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 20px 20px 12px;
-  border-bottom: 1px solid var(--line);
-}
-@media (max-width: 699px) {
-  .sheet-head {
-    padding-top: 26px;
-  }
-}
-
-.sheet-head__text {
-  flex: 1;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -88,38 +11,12 @@
 }
 
 .sheet-sub {
-  margin-top: 3px;
   font-size: 13px;
   color: var(--mut);
 }
 
-.sheet-close {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  margin: -4px -4px 0 0;
-  border-radius: var(--radius);
-  color: var(--mut);
-  transition: background 0.15s var(--ease), color 0.15s var(--ease);
-}
-.sheet-close:hover {
-  background: var(--hover);
-  color: var(--fg);
-}
-
-.sheet-body {
-  flex: 1;
-  min-height: 0;
-  padding: 20px;
-  overscroll-behavior: contain;
-}
-
-.sheet-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 20px;
-  border-top: 1px solid var(--line);
-  background: var(--softer);
+@media (max-width: 699px) {
+  .sheet-drawer .drawer-body {
+    padding: 20px;
+  }
 }

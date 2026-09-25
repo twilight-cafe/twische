@@ -1,10 +1,13 @@
 /**
  * 一条日程实例的展示单元。
  *
- * 固定时段与截止时间用**形状**区分而不是颜色：前者是一条实心竖标（表示"占据了
- * 一段连续时间"），后者是一个空心圆点（表示"某一刻的终点"）。整个界面的色彩
- * 克制到只有墨色与一抹暮色，因此形状必须承担主要的区分职责。
+ * 固定时段与截止时间靠 `.oi__time` 的**文字**区分：前者渲染成区间（`09:00–10:00`）
+ * 并额外给出时长，后者渲染成单点时刻（`18:30`）或"全天"。这里刻意不再放一个
+ * 表示类型的形状标记 —— 它与左侧的打卡圆圈挤在同一列、又没有任何图例承接，
+ * 读者无法从形状反推出含义，只会平白多出一个视觉元素。形状语义在有图例的
+ * WeekView（`.legend`）和字形更紧凑的任务列表（`.row__mark`）里保留。
  */
+import { IconButton, Tag } from 'ink-design';
 import type { OccurrenceWithTask } from '@/lib/types';
 import { formatDuration } from '@shared/recurrence.js';
 import Icon from './Icon';
@@ -15,6 +18,10 @@ export interface OccurrenceItemProps {
   /** 紧凑模式用于时间网格内的色块 */
   compact?: boolean;
   showDate?: boolean;
+  /** 是否显示“已逾期”标记；今日时间线里归属日仍展示，但不重复标记。 */
+  showOverdue?: boolean;
+  /** 调用方按自己的口径判定为逾期时，强制标记（例如 fixed 的错过实例）。 */
+  forceOverdue?: boolean;
   onToggle?: (item: OccurrenceWithTask) => void;
   onEdit?: (item: OccurrenceWithTask) => void;
 }
@@ -22,7 +29,15 @@ export interface OccurrenceItemProps {
 const clock = (n: number): string =>
   String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
 
-export function OccurrenceItem({ item, compact = false, showDate = false, onToggle, onEdit }: OccurrenceItemProps) {
+export function OccurrenceItem({
+  item,
+  compact = false,
+  showDate = false,
+  showOverdue = true,
+  forceOverdue = false,
+  onToggle,
+  onEdit,
+}: OccurrenceItemProps) {
   const occ = item.occurrence;
   const task = item.task;
 
@@ -34,9 +49,10 @@ export function OccurrenceItem({ item, compact = false, showDate = false, onTogg
       : `${clock(occ.startMinutes)}–${clock(occ.endMinutes)}`;
 
   const durationLabel = occ.kind === 'fixed' ? formatDuration(occ.durationMinutes) : '';
-  const overdue = occ.overdue && !occ.done;
+  const overdue = showOverdue && (occ.overdue || forceOverdue) && !occ.done;
 
-  const [, m, d] = occ.dateKey.split('-');
+  const endKey = occ.endsOnNextDay || occ.dateKey;
+  const [, m, d] = endKey.split('-');
   const dateLabel = `${Number(m)}/${Number(d)}`;
 
   const cls = [
@@ -65,9 +81,8 @@ export function OccurrenceItem({ item, compact = false, showDate = false, onTogg
         }
       }}
     >
-      <button
+      <IconButton
         className="oi__check"
-        type="button"
         aria-label={occ.done ? '标记为未完成' : '标记为已完成'}
         title={occ.done ? '标记为未完成' : '标记为已完成'}
         onClick={(e) => {
@@ -76,9 +91,7 @@ export function OccurrenceItem({ item, compact = false, showDate = false, onTogg
         }}
       >
         {occ.done && <Icon name="check" size={12} stroke={2.4} />}
-      </button>
-
-      <span className="oi__rule" aria-hidden="true" />
+      </IconButton>
 
       <div className="oi__body">
         <div className="oi__line">
@@ -101,9 +114,9 @@ export function OccurrenceItem({ item, compact = false, showDate = false, onTogg
             )}
             {overdue && <span className="oi__overdue">已逾期</span>}
             {task.tags.map((t) => (
-              <span key={t} className="oi__tag">
+              <Tag key={t} className="oi__tag">
                 {t}
-              </span>
+              </Tag>
             ))}
           </div>
         ) : (

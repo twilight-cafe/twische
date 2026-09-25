@@ -5,13 +5,16 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 )
+
 // ═══════════════════════════════════════════════════════════
 // 向量时钟：设备键必须是已登记设备
 // 修复前：{"GHOST-DEVICE-NEVER-EXISTED": 7} 被接受，凭空造出 device_clocks 行，
@@ -302,6 +305,118 @@ func TestSec_RecordIDCharsetEnforced(t *testing.T) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// 记录 id：两段式 completion 主键
+//
+// 修复前：完成打卡用 `taskId|实例键` 作确定性 id（多端勾选同一天必须算出同一条
+// 记录），但 id 白名单只有单段分支，竖线一律被拒。后果是这些记录在客户端正常
+// 落库、界面照常显示"已打卡"，只有同步静默失败 —— 最后一位服务端确认过的打卡
+// 永远推不上去，且用户毫无察觉。
+// ═══════════════════════════════════════════════════════════
+
+func TestSec_CompositeCompletionIDAccepted(t *testing.T) {
+	inst := makeInstance(t, true)
+	if r := inst.loginSimple(t); r.status != 200 {
+		t.Fatalf("登录失败")
+	}
+
+	taskID := "3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b"
+
+	// 客户端会产生两类后缀：固定任务按归属日（YYYY-MM-DD），
+	// 截止任务按精确到分钟的本地时刻（YYYY-MM-DDTHH:mm）。
+	for _, suffix := range []string{
+		"2026-09-16",
+		"2026-09-20T18:30",
+		"2026-09-20T00:00",
+	} {
+		recID := taskID + "|" + suffix
+		spec := fmt.Sprintf(
+			`{"id":%s,"kind":"completion","data":{"taskId":%s,"occurrence":%s,"doneAt":1},`+
+				`"vc":{"device-A-0001":1},"updatedAt":1700000000000,"deleted":false}`,
+			string(mustRawJSON(recID)), string(mustRawJSON(taskID)), string(mustRawJSON(suffix)))
+		res := inst.call(t, "POST", "/api/sync", pushRaw("device-A-0001", spec), nil)
+		if res.status != 200 {
+			t.Fatalf("两段式 id %q 应被接受，实际 %d %s", recID, res.status, firstLine(res.text))
+		}
+		if !strings.Contains(res.text, `"created"`) {
+			t.Fatalf("两段式 id %q 应落库为 created，实际 %s", recID, firstLine(res.text))
+		}
+	}
+
+	// 确认真的进了库（而不是被"接受"却默默丢弃）
+	var n int
+	inst.db.QueryRow(
+		"SELECT COUNT(*) FROM records WHERE kind = 'completion' AND id LIKE '%|%'").Scan(&n)
+	if n != 3 {
+		t.Fatalf("两段式 completion 记录应落库 3 条，实际 %d", n)
+	}
+
+	// 幂等：同一条重复推送必须判为 unchanged，否则多端同步会产生乒乓
+	recID := taskID + "|2026-09-16"
+	dup := fmt.Sprintf(
+		`{"id":%s,"kind":"completion","data":{"taskId":%s,"occurrence":"2026-09-16","doneAt":1},`+
+			`"vc":{"device-A-0001":1},"updatedAt":1700000000000,"deleted":false}`,
+		string(mustRawJSON(recID)), string(mustRawJSON(taskID)))
+	res := inst.call(t, "POST", "/api/sync", pushRaw("device-A-0001", dup), nil)
+	if res.status != 200 || !strings.Contains(res.text, `"unchanged"`) {
+		t.Fatalf("重复推送应判为 unchanged，实际 %d %s", res.status, firstLine(res.text))
+	}
+}
+
+// 放宽不得成为开后门：两段式的每一段都必须落在收紧的字符集里。
+// 用例必须断言**拒绝理由来自 id 白名单本身** —— 否则别的字段先报错时，
+// 就算 id 被放行也看不出来，这条测试就成了摆设。
+func TestSec_CompositeIDStillRejectsPayloads(t *testing.T) {
+	inst := makeInstance(t, true)
+	if r := inst.loginSimple(t); r.status != 200 {
+		t.Fatalf("登录失败")
+	}
+
+	bad := []string{
+		`'; DROP TABLE records;--|2026-09-16`,
+		"task\x00\x07\x1b[31mred|2026-09-16",
+		"../../etc/passwd|2026-09-16",
+		"../x|2026-09-16",
+		"task|../../etc/passwd",
+		"task with space|2026-09-16",
+		"task|x/y",
+		"task|x\\y",
+		"a|b|c",                                  // 两段以上
+		"|2026-09-16",                            // 前缀为空
+		"task|",                                  // 后缀为空
+		"|",                                      // 两侧皆空
+		"task|2026-09-16|",                       // 尾随竖线
+		strings.Repeat("x", 129) + "|2026-09-16", // 前缀超长
+		"task|" + strings.Repeat("y", 65),        // 后缀超长
+	}
+
+	for _, id := range bad {
+		spec := fmt.Sprintf(
+			`{"id":%s,"kind":"task","data":{"title":"x"},"vc":{"device-A-0001":1},`+
+				`"updatedAt":1700000000000,"deleted":false}`, string(mustRawJSON(id)))
+		res := inst.call(t, "POST", "/api/sync", pushRaw("device-A-0001", spec), nil)
+		if res.status != 400 {
+			t.Errorf("非法 id %q 应被拒绝，实际 %d %s", id, res.status, firstLine(res.text))
+			continue
+		}
+		// 必须是被 id 白名单拦下的，不是碰巧被别的字段拦下
+		if !strings.Contains(res.text, "记录 id") {
+			t.Errorf("非法 id %q 的拒绝理由应指向 id 白名单，实际 %s", id, firstLine(res.text))
+		}
+	}
+
+	var n int
+	inst.db.QueryRow("SELECT COUNT(*) FROM records").Scan(&n)
+	if n != 0 {
+		t.Fatalf("非法 id 不应落库: %d", n)
+	}
+	var tables int
+	inst.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='records'").Scan(&tables)
+	if tables != 1 {
+		t.Fatal("records 表消失了 —— 疑似 SQL 注入")
+	}
+}
+
+// ═══════════════════════════════════════════════════════════
 // 设备管理提权
 // 修复前：任何登录设备可改名/吊销/删除其它设备，无需任何额外凭证
 // ═══════════════════════════════════════════════════════════
@@ -547,6 +662,314 @@ func TestSec_LegacyClockSanitizedOnOpen(t *testing.T) {
 		t.Fatalf("device_clocks 也应被夹到上界，实际 %d", counter)
 	}
 	t.Logf("消毒后 vc.dev=%v device_clocks.counter=%d（上界 %d）", got, counter, Sync.MaxVcCounter)
+}
+
+// ═══════════════════════════════════════════════════════════
+// 设备移除：device_clocks 必须保留为向量时钟历史注册表
+// 修复前：forget 同时删除 devices 与 device_clocks，引用过该设备的记录
+// 之后会被 validateIncoming 判为“未登记设备”，永远无法再推送。
+// ═══════════════════════════════════════════════════════════
+func TestSec_DeviceForgetKeepsVcHistory(t *testing.T) {
+	inst := makeInstance(t, true)
+	if r := inst.login(t, map[string]string{"deviceId": "device-A-0001", "deviceName": "A"}); r.status != 200 {
+		t.Fatalf("A 登录失败")
+	}
+	cookieA := inst.jars["default"]
+	cookieB := cookieFor(t, inst, "device-B-0002")
+
+	// B 先以自己的身份写一条记录，device_clocks 留下 B 的历史分量。
+	inst.jars["default"] = cookieB
+	created := inst.call(t, "POST", "/api/sync",
+		syncBody("device-B-0002", 0, []map[string]any{
+			rec("forget-keeps-writable", map[string]any{"device-B-0002": 1},
+				map[string]any{"title": "B 的版本"}, 1_700_000_000_000, nil),
+		}), nil)
+	if created.status != 200 {
+		t.Fatalf("B 创建记录失败: %d %s", created.status, created.text)
+	}
+
+	// A 移除 B：只应删除当前设备行，不能删除历史时钟。
+	inst.jars["default"] = cookieA
+	forgot := inst.call(t, "POST", "/api/devices/forget",
+		map[string]any{"deviceId": "device-B-0002", "password": testPassword}, nil)
+	if forgot.status != 200 {
+		t.Fatalf("移除 B 失败: %d %s", forgot.status, forgot.text)
+	}
+	list := inst.call(t, "GET", "/api/devices", nil, nil)
+	for _, d := range list.json["devices"].([]any) {
+		if d.(map[string]any)["id"] == "device-B-0002" {
+			t.Fatal("被移除的设备不应继续出现在设备列表里")
+		}
+	}
+
+	// A 更新时仍带着 B 的分量：必须通过，而不是被判未登记设备。
+	updated := inst.call(t, "POST", "/api/sync",
+		syncBody("device-A-0001", 0, []map[string]any{
+			rec("forget-keeps-writable", map[string]any{"device-B-0002": 1, "device-A-0001": 1},
+				map[string]any{"title": "A 更新后的版本"}, 1_700_000_100_000, nil),
+		}), nil)
+	if updated.status != 200 {
+		t.Fatalf("移除设备后原记录应仍可推送: %d %s", updated.status, updated.text)
+	}
+	if updated.json["applied"].([]any)[0].(map[string]any)["status"] != "updated" {
+		t.Fatalf("记录应被接受为 updated: %v", updated.json["applied"])
+	}
+	var clocks int
+	inst.db.QueryRow("SELECT COUNT(*) FROM device_clocks WHERE device_id = ?", "device-B-0002").Scan(&clocks)
+	if clocks != 1 {
+		t.Fatalf("device_clocks 历史注册项应保留，实际 %d", clocks)
+	}
+}
+
+// ═══════════════════════════════════════════════════════════
+// 向量时钟：不能替其它设备推进分量
+// 修复前：A 可推送 {B: MAX}，把 B 的时钟顶到上界；B 之后每次编辑
+// vcIncrement 都被夹在 MAX，VC 不再变化，修改被服务端判为 diverged 后丢弃。
+// ═══════════════════════════════════════════════════════════
+func TestSec_OtherDeviceClockCannotBeForged(t *testing.T) {
+	inst := makeInstance(t, true)
+	if r := inst.login(t, map[string]string{"deviceId": "device-A-0001", "deviceName": "A"}); r.status != 200 {
+		t.Fatalf("A 登录失败")
+	}
+	cookieA := inst.jars["default"]
+	cookieB := cookieFor(t, inst, "device-B-0002")
+
+	// A 还没有见过 B 的任何时钟分量，不能替 B 创建 B:1。
+	forged := inst.call(t, "POST", "/api/sync",
+		syncBody("device-A-0001", 0, []map[string]any{
+			rec("clock-forge", map[string]any{"device-B-0002": 1},
+				map[string]any{"title": "伪造版本"}, 1_700_000_000_000, nil),
+		}), nil)
+	if forged.status != 400 {
+		t.Fatalf("替其它设备推进时钟必须被拒绝: %d %s", forged.status, forged.text)
+	}
+
+	// B 自己可以写 B:1，服务端时钟随之变为 1。
+	inst.jars["default"] = cookieB
+	created := inst.call(t, "POST", "/api/sync",
+		syncBody("device-B-0002", 0, []map[string]any{
+			rec("clock-forge", map[string]any{"device-B-0002": 1},
+				map[string]any{"title": "B 的合法版本"}, 1_700_000_100_000, nil),
+		}), nil)
+	if created.status != 200 || created.json["applied"].([]any)[0].(map[string]any)["status"] != "created" {
+		t.Fatalf("B 自己的首次推送应成功: %d %s", created.status, created.text)
+	}
+
+	// A 仍然不能把 B 推到 2。
+	inst.jars["default"] = cookieA
+	forgedAgain := inst.call(t, "POST", "/api/sync",
+		syncBody("device-A-0001", 0, []map[string]any{
+			rec("clock-forge", map[string]any{"device-B-0002": 2},
+				map[string]any{"title": "再次伪造"}, 1_700_000_200_000, nil),
+		}), nil)
+	if forgedAgain.status != 400 {
+		t.Fatalf("超过服务端已知值的分量必须被拒绝: %d %s", forgedAgain.status, forgedAgain.text)
+	}
+
+	// B 自己更新到 2，证明正常设备不受影响。
+	inst.jars["default"] = cookieB
+	updated := inst.call(t, "POST", "/api/sync",
+		syncBody("device-B-0002", 0, []map[string]any{
+			rec("clock-forge", map[string]any{"device-B-0002": 2},
+				map[string]any{"title": "B 更新后的版本"}, 1_700_000_300_000, nil),
+		}), nil)
+	if updated.status != 200 || updated.json["applied"].([]any)[0].(map[string]any)["status"] != "updated" {
+		t.Fatalf("B 自己的后续更新应成功: %d %s", updated.status, updated.text)
+	}
+	inst.jars["default"] = cookieA
+}
+
+// ═══════════════════════════════════════════════════════════
+// 登录限流：并发失败不能绕过 IP 预占与账户锁定原子自增
+// 修复前：40 个并发错误请求全部跑 bcrypt，failed_attempts 因丢失更新只 +1。
+// ═══════════════════════════════════════════════════════════
+func TestSec_LoginConcurrentAtomicThrottle(t *testing.T) {
+	inst := makeInstance(t, true)
+	ResetThrottle()
+	defer ResetThrottle()
+	const ip = "203.0.113.77"
+	const attempts = 40
+	errs := make(chan *AppError, attempts)
+	var wg sync.WaitGroup
+	for i := 0; i < attempts; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, _, _, apiErr := login(inst.db, fmt.Sprintf("wrong-concurrent-%d", i),
+				"race-device-0001", "", "test-agent", ip)
+			errs <- apiErr
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	throttled, locked := 0, 0
+	for apiErr := range errs {
+		if apiErr == nil {
+			t.Fatal("错误密码不应登录成功")
+		}
+		switch apiErr.Code {
+		case "too_many_requests":
+			throttled++
+		case "locked":
+			locked++
+		case "bad_credentials":
+		default:
+			t.Fatalf("意外错误: %v", apiErr)
+		}
+	}
+	if throttled != attempts-ipMaxAttempts {
+		t.Fatalf("并发预占应只放行 %d 次，实际 throttled=%d", ipMaxAttempts, throttled)
+	}
+	if locked == 0 {
+		t.Fatal("并发失败必须触发账户锁定")
+	}
+	var failed int64
+	var lockedUntil int64
+	inst.db.QueryRow("SELECT failed_attempts, locked_until FROM account WHERE id = 1").Scan(&failed, &lockedUntil)
+	if failed < int64(Auth.LockoutThreshold) || failed > ipMaxAttempts {
+		t.Fatalf("failed_attempts 应原子累计到 5–30，实际 %d", failed)
+	}
+	if lockedUntil <= nowMs() {
+		t.Fatal("账户应处于锁定状态")
+	}
+	if got := len(ipBucketOf(ip).hits); got != ipMaxAttempts {
+		t.Fatalf("IP 预占名额应停在 %d，实际 %d", ipMaxAttempts, got)
+	}
+	if _, _, _, apiErr := login(inst.db, "another-wrong", "race-device-0001", "", "test-agent", ip); apiErr == nil || apiErr.Code != "too_many_requests" {
+		t.Fatalf("封锁窗口内应直接 429/too_many_requests，实际 %v", apiErr)
+	}
+}
+
+// 登录成功必须释放预占名额，否则正常用户会被自己的成功请求计入限流。
+func TestSec_LoginSuccessReleasesIpReservation(t *testing.T) {
+	inst := makeInstance(t, true)
+	ResetThrottle()
+	defer ResetThrottle()
+	const ip = "203.0.113.88"
+	for i := 0; i < 3; i++ {
+		_, _, _, apiErr := login(inst.db, testPassword, fmt.Sprintf("device-ok-%04d", i),
+			"OK 设备", "test-agent", ip)
+		if apiErr != nil {
+			t.Fatalf("正确密码登录失败: %v", apiErr)
+		}
+	}
+	if got := len(ipBucketOf(ip).hits); got != 0 {
+		t.Fatalf("成功登录后预占名额应被释放，实际残留 %d", got)
+	}
+}
+
+// ═══════════════════════════════════════════════════════════
+// 同步状态加载：覆盖数据库错误分支，避免修复逻辑只在 happy path 上被验证。
+// ═══════════════════════════════════════════════════════════
+func TestSec_SyncStateLoadErrorBranches(t *testing.T) {
+	closed, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := closed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadKnownDevices(closed); err == nil {
+		t.Fatal("关闭的数据库应让 loadKnownDevices 返回错误")
+	}
+	if _, err := loadDeviceClocks(closed); err == nil {
+		t.Fatal("关闭的数据库应让 loadDeviceClocks 返回错误")
+	}
+
+	// Scan 错误：id 为 NULL。
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`
+		CREATE TABLE devices (id TEXT);
+		CREATE TABLE device_clocks (device_id TEXT, counter INTEGER);
+		INSERT INTO devices (id) VALUES (NULL);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadKnownDevices(db); err == nil {
+		t.Fatal("NULL id 应让 loadKnownDevices 返回 Scan 错误")
+	}
+
+	// Scan 错误：counter 为 NULL；同时用于覆盖 applyPush 的加载失败分支。
+	db2, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db2.Close()
+	db2.SetMaxOpenConns(1)
+	if _, err := db2.Exec(`
+		CREATE TABLE devices (id TEXT);
+		CREATE TABLE device_clocks (device_id TEXT, counter TEXT);
+		INSERT INTO device_clocks (device_id, counter) VALUES ('device-B-0002', NULL);
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadDeviceClocks(db2); err == nil {
+		t.Fatal("NULL counter 应让 loadDeviceClocks 返回 Scan 错误")
+	}
+	tx, err := db2.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, apiErr := applyPush(tx, "device-A-0001", nil); apiErr == nil || apiErr.Code != "internal_error" {
+		t.Fatalf("applyPush 加载设备时钟失败时应返回 internal_error，实际 %v", apiErr)
+	}
+	_ = tx.Rollback()
+}
+
+// ═══════════════════════════════════════════════════════════
+// validateIncoming：补齐边界输入的拒绝路径
+// ═══════════════════════════════════════════════════════════
+func TestSec_ValidateIncomingRejectsMalformed(t *testing.T) {
+	known := map[string]bool{"device-A-0001": true}
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"非法 JSON", `{`},
+		{"缺少 id", `{"kind":"task","data":{},"vc":{"device-A-0001":1},"updatedAt":1}`},
+		{"id 字符集不合法", `{"id":"bad id","kind":"task","data":{},"vc":{"device-A-0001":1},"updatedAt":1}`},
+		{"kind 不合法", `{"id":"x","kind":"nope","data":{},"vc":{"device-A-0001":1},"updatedAt":1}`},
+		{"data 不是对象/数组", `{"id":"x","kind":"task","data":"str","vc":{"device-A-0001":1},"updatedAt":1}`},
+		{"缺少 vc", `{"id":"x","kind":"task","data":{},"updatedAt":1}`},
+		{"vc 是数组", `{"id":"x","kind":"task","data":{},"vc":[],"updatedAt":1}`},
+		{"vc 分量为未知设备", `{"id":"x","kind":"task","data":{},"vc":{"unknown-device":1},"updatedAt":1}`},
+		{"vc 设备键为空", `{"id":"x","kind":"task","data":{},"vc":{"":1},"updatedAt":1}`},
+		{"vc 分量不是整数", `{"id":"x","kind":"task","data":{},"vc":{"device-A-0001":"1"},"updatedAt":1}`},
+		{"vc 分量为 0", `{"id":"x","kind":"task","data":{},"vc":{"device-A-0001":0},"updatedAt":1}`},
+		{"vc 分量超出上界", fmt.Sprintf(`{"id":"x","kind":"task","data":{},"vc":{"device-A-0001":%d},"updatedAt":1}`, uint64(Sync.MaxVcCounter)+1)},
+		{"vc 分量非普通整数", `{"id":"x","kind":"task","data":{},"vc":{"device-A-0001":1e3},"updatedAt":1}`},
+		{"缺少 updatedAt", `{"id":"x","kind":"task","data":{},"vc":{"device-A-0001":1}}`},
+		{"updatedAt 非普通整数", `{"id":"x","kind":"task","data":{},"vc":{"device-A-0001":1},"updatedAt":1e3}`},
+		{"data 超过记录上限", fmt.Sprintf(`{"id":"x","kind":"task","data":{"x":%q},"vc":{"device-A-0001":1},"updatedAt":1}`, strings.Repeat("a", Sync.MaxRecordBytes))},
+	}
+	// vc 分量过多：在单独 case 里构造，避免字面量过长。
+	var many strings.Builder
+	many.WriteString(`{"id":"x","kind":"task","data":{},"vc":{`)
+	for i := 0; i <= Sync.MaxVcDevices; i++ {
+		if i > 0 {
+			many.WriteByte(',')
+		}
+		fmt.Fprintf(&many, `"k%d":1`, i)
+	}
+	many.WriteString(`},"updatedAt":1}`)
+	cases = append(cases, struct {
+		name string
+		raw  string
+	}{"vc 分量过多", many.String()})
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			inc, apiErr := validateIncoming([]byte(tc.raw), known, "device-A-0001", map[string]uint64{"device-A-0001": 1})
+			if apiErr == nil || inc != nil {
+				t.Fatalf("应拒绝，实际 inc=%v err=%v", inc, apiErr)
+			}
+		})
+	}
 }
 
 // ───────────────────────── 辅助 ─────────────────────────

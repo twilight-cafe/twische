@@ -135,6 +135,12 @@
   border-top: 1px solid var(--line);
 }
 
+.btn.foot-btn {
+  border-color: transparent;
+  padding: 0 8px;
+  font-weight: 400;
+}
+
 .foot-btn {
   display: flex;
   align-items: center;
@@ -284,6 +290,12 @@
     flex: none;
   }
 
+  .btn.icon-btn {
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+
   .icon-btn {
     display: grid;
     place-items: center;
@@ -345,6 +357,8 @@
     bottom: calc(var(--shell-tabbar) + env(safe-area-inset-bottom) + 16px);
     width: 52px;
     height: 52px;
+    padding: 0;
+    border: 0;
     border-radius: 50%;
     background: var(--acc);
     color: var(--on-acc);

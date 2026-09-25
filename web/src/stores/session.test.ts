@@ -157,11 +157,14 @@ describe('提权密码队列', () => {
 });
 
 describe('bootstrap 启动流程', () => {
-  it('未初始化 → need-init，不建本地仓库', async () => {
+  it('未初始化 + 无本地会话 → need-init，走慢路径探测', async () => {
     apiMock.status.mockResolvedValue(health(false));
     await useSessionStore.getState().bootstrap();
-    expect(useSessionStore.getState().status).toBe<SessionStatus>('need-init');
-    expect(initRepo).not.toHaveBeenCalled();
+    const st = useSessionStore.getState();
+    expect(st.status).toBe<SessionStatus>('need-init');
+    // 未初始化时不该再问"我是谁"
+    expect(apiMock.session).not.toHaveBeenCalled();
+    expect(st.sessionVerified).toBe(false);
   });
 
   it('已登录 → ready，并触发设备刷新与静默同步', async () => {
@@ -173,6 +176,7 @@ describe('bootstrap 启动流程', () => {
     expect(st.elevated).toBe(true);
     expect(st.elevatedUntil).toBe(999);
     expect(st.serverVersion).toBe('1.0.0');
+    expect(st.sessionVerified).toBe(true);
     expect(syncNow).toHaveBeenCalledWith({ silent: true });
     expect(bindOnlineListeners).toHaveBeenCalled();
   });
@@ -205,6 +209,193 @@ describe('bootstrap 启动流程', () => {
     apiMock.status.mockRejectedValue(new ApiError('server_error', '服务端炸了', 500));
     await useSessionStore.getState().bootstrap();
     expect(useSessionStore.getState().status).toBe<SessionStatus>('error');
+  });
+});
+
+/**
+ * 快路径是"联网卡顿"修复的核心：本机登录过的设备必须立刻拿到界面，
+ * 网络校验降级为后台动作。这一组用例锁住该契约。
+ */
+describe('bootstrap 快路径（乐观首屏）', () => {
+  it('本机登录过 → 不起 boot，立即 ready 且未验证，随后后台校验', async () => {
+    localStorage.setItem('twische.authed', '1');
+    let releaseStatus: ((v: unknown) => void) | null = null;
+    // status 挂住不返回，模拟"服务端很慢"：界面不该被它挡住
+    apiMock.status.mockImplementation(
+      () =>
+        new Promise((res) => {
+          releaseStatus = res;
+        }),
+    );
+
+    await useSessionStore.getState().bootstrap();
+
+    // 关键断言：网络还没答话，界面已经 ready 了
+    const st = useSessionStore.getState();
+    expect(st.status).toBe<SessionStatus>('ready');
+    expect(st.sessionVerified).toBe(false);
+    expect(initRepo).toHaveBeenCalled();
+
+    // 放行后台探测，确认它能正常收尾
+    releaseStatus?.(health(true));
+    apiMock.session.mockResolvedValue(sessionOk(false));
+    await vi.waitFor(() => {
+      expect(useSessionStore.getState().sessionVerified).toBe(true);
+    });
+  });
+
+  it('后台校验成功 → 补上版本号与设备刷新', async () => {
+    localStorage.setItem('twische.authed', '1');
+    apiMock.status.mockResolvedValue(health(true));
+    apiMock.session.mockResolvedValue(sessionOk(true));
+
+    await useSessionStore.getState().bootstrap();
+    expect(useSessionStore.getState().serverVersion).toBe('1.0.0');
+
+    await vi.waitFor(() => {
+      const st = useSessionStore.getState();
+      expect(st.sessionVerified).toBe(true);
+      expect(st.elevated).toBe(true);
+    });
+    expect(apiMock.devices).toHaveBeenCalled();
+  });
+
+  it('后台校验：session 缺 elevatedUntil → 按 0 处理', async () => {
+    localStorage.setItem('twische.authed', '1');
+    apiMock.status.mockResolvedValue(health(true));
+    apiMock.session.mockResolvedValue({ session: { elevated: true } });
+
+    await useSessionStore.getState().bootstrap();
+    await vi.waitFor(() => {
+      expect(useSessionStore.getState().sessionVerified).toBe(true);
+    });
+    const st = useSessionStore.getState();
+    expect(st.elevated).toBe(true);
+    expect(st.elevatedUntil).toBe(0);
+  });
+
+  it('后台校验发现服务端未初始化 → 回退 need-init', async () => {
+    localStorage.setItem('twische.authed', '1');
+    apiMock.status.mockResolvedValue(health(false));
+
+    await useSessionStore.getState().bootstrap();
+    // 后台探测用 mockResolvedValue 会极快返回，可能在 bootstrap 内就跑完了；
+    // 断言最终态即可（无论在这轮 await 之前还是之后收敛，结论都应一致）
+    await vi.waitFor(() => {
+      expect(useSessionStore.getState().status).toBe<SessionStatus>('need-init');
+    });
+    expect(useSessionStore.getState().sessionVerified).toBe(false);
+  });
+
+  it('后台校验发现登录失效 → 回登录页并清掉可信标记', async () => {
+    localStorage.setItem('twische.authed', '1');
+    apiMock.status.mockResolvedValue(health(true));
+    apiMock.session.mockRejectedValue(new ApiError('unauthorized', '未登录', 401));
+
+    await useSessionStore.getState().bootstrap();
+    await vi.waitFor(() => {
+      expect(useSessionStore.getState().status).toBe<SessionStatus>('need-login');
+    });
+    expect(localStorage.getItem('twische.authed')).toBeNull();
+    expect(useSessionStore.getState().sessionVerified).toBe(false);
+  });
+
+  it('后台校验网络失败 → 保持 ready 并转为离线', async () => {
+    localStorage.setItem('twische.authed', '1');
+    apiMock.status.mockRejectedValue(new ApiError('network_error', '断网'));
+
+    await useSessionStore.getState().bootstrap();
+    await vi.waitFor(() => {
+      const st = useSessionStore.getState();
+      expect(st.status).toBe<SessionStatus>('ready');
+      expect(st.offlineMode).toBe(true);
+      expect(st.sessionVerified).toBe(false);
+    });
+    expect(syncNow).toHaveBeenCalledWith({ silent: true });
+  });
+
+  it('后台校验遇到非网络错误 → 仍不把用户踢出界面', async () => {
+    localStorage.setItem('twische.authed', '1');
+    apiMock.status.mockRejectedValue(new ApiError('server_error', '500', 500));
+
+    await useSessionStore.getState().bootstrap();
+    // 非网络错误也不该打断用户：界面留在一开始就绪的状态，只是标记为未验证
+    await vi.waitFor(() => {
+      expect(apiMock.status).toHaveBeenCalled();
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    const st = useSessionStore.getState();
+    expect(st.status).toBe<SessionStatus>('ready');
+    expect(st.sessionVerified).toBe(false);
+    // 非网络失败不进离线模式（离线专指"连不上"），也不弹错误打断
+    expect(st.offlineMode).toBe(false);
+    expect(st.bootError).toBe('');
+  });
+
+  it('后台校验：session 抛非认证类错误 → 同样留在界面（非离线）', async () => {
+    localStorage.setItem('twische.authed', '1');
+    apiMock.status.mockResolvedValue(health(true));
+    // health 正常、session 报 500：不是登录失效，不该回登录页
+    apiMock.session.mockRejectedValue(new ApiError('server_error', 'session 500', 500));
+
+    await useSessionStore.getState().bootstrap();
+    await vi.waitFor(() => {
+      expect(apiMock.session).toHaveBeenCalled();
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    const st = useSessionStore.getState();
+    expect(st.status).toBe<SessionStatus>('ready');
+    expect(st.sessionVerified).toBe(false);
+    expect(st.offlineMode).toBe(false);
+    // 认证标记要保留：这只是服务端抽风，不是会话失效
+    expect(localStorage.getItem('twische.authed')).toBe('1');
+  });
+
+  it('后台校验：session 网络错误 → 转为离线模式', async () => {
+    localStorage.setItem('twische.authed', '1');
+    apiMock.status.mockResolvedValue(health(true));
+    apiMock.session.mockRejectedValue(new ApiError('network_error', '断网'));
+
+    await useSessionStore.getState().bootstrap();
+    await vi.waitFor(() => {
+      const st = useSessionStore.getState();
+      expect(st.offlineMode).toBe(true);
+    });
+    const st = useSessionStore.getState();
+    expect(st.status).toBe<SessionStatus>('ready');
+    expect(st.sessionVerified).toBe(false);
+  });
+
+  it('后台校验期间用户已登出 → 不把状态覆盖回 ready', async () => {
+    localStorage.setItem('twische.authed', '1');
+    let releaseSession: ((v: unknown) => void) | null = null;
+    apiMock.status.mockResolvedValue(health(true));
+    apiMock.session.mockImplementation(
+      () =>
+        new Promise((res) => {
+          releaseSession = res;
+        }),
+    );
+
+    await useSessionStore.getState().bootstrap();
+    // 模拟用户在后台探测还没回来时点了退出
+    useSessionStore.setState({ status: 'need-login' });
+    releaseSession?.(sessionOk(false));
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(useSessionStore.getState().status).toBe<SessionStatus>('need-login');
+  });
+
+  it('快路径本地仓库起不来 → 回落到慢路径探测', async () => {
+    localStorage.setItem('twische.authed', '1');
+    vi.mocked(initRepo).mockRejectedValueOnce(new Error('idb 炸了'));
+    apiMock.status.mockResolvedValue(health(true));
+    apiMock.session.mockResolvedValue(sessionOk(false));
+
+    await useSessionStore.getState().bootstrap();
+    expect(useSessionStore.getState().status).toBe<SessionStatus>('ready');
+    // 第二次 initRepo 成功，说明确实回落并完成了完整探测
+    expect(useSessionStore.getState().sessionVerified).toBe(true);
   });
 });
 
@@ -596,12 +787,37 @@ describe('bootstrap 补充分支', () => {
     expect(useSessionStore.getState().bootError).toBe('boom-string');
   });
 
+  it('本地仓库起不来 + 服务端正常 → 错误指引（没有数据源就不能进界面）', async () => {
+    apiMock.status.mockResolvedValue(health(true));
+    vi.mocked(initRepo).mockRejectedValueOnce(new Error('idb 炸了'));
+    await useSessionStore.getState().bootstrap();
+    const st = useSessionStore.getState();
+    expect(st.status).toBe<SessionStatus>('error');
+    expect(st.bootError).toBe('idb 炸了');
+  });
+
   it('离线模式但本地仓库也起不来 → 错误指引', async () => {
     localStorage.setItem('twische.authed', '1');
     apiMock.status.mockRejectedValue(new ApiError('network_error', '断网'));
-    vi.mocked(initRepo).mockRejectedValueOnce(new Error('idb 炸了'));
+    // 快路径与慢路径各会 initRepo 一次，两次都失败才真的无路可走
+    vi.mocked(initRepo).mockRejectedValue(new Error('idb 炸了'));
     await useSessionStore.getState().bootstrap();
     expect(useSessionStore.getState().status).toBe<SessionStatus>('error');
+  });
+
+  it('快路径仓库失败但慢路径恢复 → 仍能进离线模式', async () => {
+    localStorage.setItem('twische.authed', '1');
+    apiMock.status.mockRejectedValue(new ApiError('network_error', '断网'));
+    // 快路径那次失败（回落慢路径），慢路径那次成功 → 走离线兜底
+    vi.mocked(initRepo).mockRejectedValueOnce(new Error('idb 抖了一下')).mockResolvedValue(undefined);
+
+    await useSessionStore.getState().bootstrap();
+    const st = useSessionStore.getState();
+    expect(st.status).toBe<SessionStatus>('ready');
+    expect(st.offlineMode).toBe(true);
+    expect(st.sessionVerified).toBe(false);
+    expect(bindOnlineListeners).toHaveBeenCalled();
+    expect(syncNow).toHaveBeenCalledWith({ silent: true });
   });
 
   it('session 缺 elevatedUntil 字段 → 按 0 处理', async () => {

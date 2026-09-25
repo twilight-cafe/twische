@@ -262,6 +262,75 @@ describe('写操作', () => {
     expect(tasks.isDone(t.id, '2026-09-07')).toBe(false);
   });
 
+  // 完成打卡的记录 id 是「任务id|实例键」的两段式确定性主键 ——
+  // 多端同时勾选同一天必须算出同一条记录，否则会各写一条、互相看不见。
+  //
+  // 这里把该形状钉死在测试里：服务端若再次收紧 id 白名单而不认竖线，
+  // 同步就会静默失败（本地照常落库与显示，只是永远推不上去），
+  // 只有这条契约测试能在改动服务端时立刻报警。
+  describe('completion 记录 id 契约', () => {
+    // 与服务端 reRecordID 的两段式分支保持一致
+    const SERVER_ID = /^(?:[A-Za-z0-9_-]{1,128}|[A-Za-z0-9_-]{1,128}\|[A-Za-z0-9:+.TZ_-]{1,64})$/;
+
+    it('固定任务：id 为「任务id|归属日」，且能被服务端白名单接受', () => {
+      const t = tasks.createTask({ title: 'f', kind: 'fixed', recurrence: weeklyRule() })!;
+      tasks.toggleCompletion(t.id, '2026-09-07');
+
+      const [rec] = tasks.completionRecords();
+      expect(rec.id).toBe(`${t.id}|2026-09-07`);
+      expect(SERVER_ID.test(rec.id)).toBe(true);
+      // 数据体里的 occurrence 必须与 id 后缀一致，否则展开时配不上
+      expect((rec.data as { occurrence: string }).occurrence).toBe('2026-09-07');
+    });
+
+    it('截止任务：id 为「任务id|精确到分的时刻」，且能被服务端白名单接受', () => {
+      const t = deadlineTask('d', '2026-09-20T18:30');
+      tasks.toggleCompletion(t.id, '2026-09-20T18:30');
+
+      const [rec] = tasks.completionRecords();
+      expect(rec.id).toBe(`${t.id}|2026-09-20T18:30`);
+      expect(SERVER_ID.test(rec.id)).toBe(true);
+    });
+
+    it('id 后缀随实例键变化：不同日期产生不同记录，同一天只产生一条', () => {
+      const t = tasks.createTask({ title: 'f', kind: 'fixed', recurrence: weeklyRule() })!;
+      tasks.toggleCompletion(t.id, '2026-09-07');
+      tasks.toggleCompletion(t.id, '2026-09-14');
+
+      const ids = tasks.completionRecords().map((r) => r.id).sort();
+      expect(ids).toEqual([`${t.id}|2026-09-07`, `${t.id}|2026-09-14`]);
+      expect(ids.every((id) => SERVER_ID.test(id))).toBe(true);
+
+      // 同一天重复勾选只切换状态，不新增记录
+      tasks.toggleCompletion(t.id, '2026-09-07');
+      expect(tasks.completionRecords().map((r) => r.id)).toEqual([`${t.id}|2026-09-14`]);
+    });
+
+    it('真实展开产出的实例键都能拼出合法 id', () => {
+      // 走 expandOccurrences 的真实路径，而不是手工编一个后缀 ——
+      // 这样 recurrence 引擎将来换键形态时这里会跟着失败
+      const fixed = tasks.createTask({
+        title: 'f',
+        kind: 'fixed',
+        recurrence: weeklyRule({ freq: 'daily', interval: 1 }),
+      })!;
+      const deadline = deadlineTask('d', '2026-09-20T00:00'); // allDay 边界
+
+      for (const item of tasks.expandRange('2026-09-07', '2026-09-21')) {
+        const isTarget = item.task.id === fixed.id || item.task.id === deadline.id;
+        if (!isTarget) continue;
+        const recId = `${item.task.id}|${item.occurrence.key}`;
+        expect(SERVER_ID.test(recId)).toBe(true);
+      }
+
+      // 确认确实覆盖到了两种任务，别让上面的循环空转通过
+      const keys = tasks
+        .expandRange('2026-09-07', '2026-09-21')
+        .filter((i) => i.task.id === fixed.id || i.task.id === deadline.id);
+      expect(keys.length).toBeGreaterThan(1);
+    });
+  });
+
   it('duplicateTask 复制任务；不存在时无动作', () => {
     const t = deadlineTask('a', '2026-09-20T10:00');
     tasks.duplicateTask(t.id);
@@ -440,5 +509,174 @@ describe('排序与下次日程', () => {
   it('nextOccurrenceOf：过去的截止任务返回 null', () => {
     const old = deadlineTask('过去', '2020-01-01T10:00');
     expect(tasks.nextOccurrenceOf(old.id)).toBeNull();
+  });
+});
+
+describe('今日无限时间线数据', () => {
+  it('occurrenceEndDateKey / dayGroupsBetween：跨夜按结束日、空日期跳过、边界过滤', () => {
+    // 9/7 周一 23:00 → 9/8 01:00，应归入 9/8。
+    tasks.createTask({
+      title: 'night',
+      kind: 'fixed',
+      recurrence: weeklyRule({ startTime: '23:00', endTime: '01:00' }),
+    })!;
+    // 9/7 的截止任务在 9/8 窗口里应被“结束日不在范围内”过滤掉。
+    deadlineTask('before-window', '2026-09-07T09:00');
+    deadlineTask('same-day-a', '2026-09-08T09:00');
+    deadlineTask('same-day-b', '2026-09-08T10:00');
+
+    const one = tasks.dayGroupsBetween('2026-09-08', '2026-09-08');
+    expect(one).toHaveLength(1);
+    expect(one[0].dateKey).toBe('2026-09-08');
+    expect(one[0].items).toHaveLength(3);
+    expect(one[0].items.some((item) => item.occurrence.spansMidnight)).toBe(true);
+
+    const group = one[0];
+    const night = group.items.find((item) => item.occurrence.spansMidnight)!;
+    const normal = group.items.find((item) => !item.occurrence.spansMidnight)!;
+    expect(tasks.occurrenceEndDateKey(night.occurrence)).toBe('2026-09-08');
+    expect(tasks.occurrenceEndDateKey(normal.occurrence)).toBe('2026-09-08');
+
+    expect(tasks.dayGroupsBetween('', '2026-09-08')).toEqual([]);
+    expect(tasks.dayGroupsBetween('2026-09-09', '2026-09-08')).toEqual([]);
+    expect(tasks.dayGroupsBetween('2026-09-10', '2026-09-12')).toEqual([]);
+  });
+
+  it('earliestTaskDateKey：取最早有效日期，忽略归档和脏日期', () => {
+    const anchor = today();
+    expect(tasks.earliestTaskDateKey()).toBe(anchor);
+
+    const early = addDays(anchor, -10)!;
+    const mid = addDays(anchor, -5)!;
+    tasks.createTask({ title: 'fixed-earliest', kind: 'fixed', recurrence: weeklyRule({ dtstart: early }) });
+    deadlineTask('deadline-later', `${mid}T10:00`);
+
+    const archived = deadlineTask('archived-earlier', `${addDays(anchor, -20)}T10:00`);
+    tasks.archiveTask(archived.id);
+
+    // 截止时间缺失 / 非法 / 固定规则缺失都只算脏数据，不能把 earliest 拉空。
+    repo.upsertRecord({ kind: 'task', data: { id: 'dirty-deadline', kind: 'deadline', dueAt: null } });
+    repo.upsertRecord({ kind: 'task', data: { id: 'dirty-bad-date', kind: 'deadline', dueAt: 'not-a-date' } });
+    repo.upsertRecord({ kind: 'task', data: { id: 'dirty-fixed', kind: 'fixed', recurrence: null } });
+
+    expect(tasks.earliestTaskDateKey()).toBe(early);
+  });
+
+  it('hasFutureTaskCandidates：未来截止、无限重复、until、次数分别判断', () => {
+    expect(tasks.hasFutureTaskCandidates()).toBe(false);
+
+    const past = toLocalDateTime(new Date(Date.now() - 24 * 3600e3));
+    deadlineTask('past', past);
+    const future = deadlineTask('future', toLocalDateTime(new Date(Date.now() + 24 * 3600e3)));
+    tasks.archiveTask(future.id);
+    expect(tasks.hasFutureTaskCandidates()).toBe(false);
+
+    deadlineTask('future-open', toLocalDateTime(new Date(Date.now() + 48 * 3600e3)));
+    expect(tasks.hasFutureTaskCandidates()).toBe(true);
+  });
+
+  it('hasFutureTaskCandidates：固定任务由 until / count 决定', () => {
+    const anchor = today();
+    const untilPast = tasks.createTask({
+      title: 'until-past',
+      kind: 'fixed',
+      recurrence: weeklyRule({ until: addDays(anchor, -1), count: null }),
+    })!;
+    expect(tasks.hasFutureTaskCandidates()).toBe(false);
+
+    tasks.updateTask(untilPast.id, { recurrence: weeklyRule({ until: addDays(anchor, 7), count: null }) });
+    expect(tasks.hasFutureTaskCandidates()).toBe(true);
+    tasks.archiveTask(untilPast.id);
+
+    tasks.createTask({ title: 'count', kind: 'fixed', recurrence: weeklyRule({ until: null, count: 2 }) });
+    expect(tasks.hasFutureTaskCandidates()).toBe(true);
+
+    repo.upsertRecord({ kind: 'task', data: { id: 'dirty-fixed', kind: 'fixed', recurrence: null } });
+    expect(tasks.hasFutureTaskCandidates()).toBe(true);
+  });
+
+  it('hasFutureTaskCandidates：固定规则缺失的脏记录直接跳过', () => {
+    repo.upsertRecord({ kind: 'task', data: { id: 'dirty-fixed-only', kind: 'fixed', recurrence: null } });
+    expect(tasks.hasFutureTaskCandidates()).toBe(false);
+  });
+
+  it('hasFutureTaskCandidates：无结束条件的固定任务视为无限未来', () => {
+    tasks.createTask({ title: 'infinite', kind: 'fixed', recurrence: weeklyRule() });
+    expect(tasks.hasFutureTaskCandidates()).toBe(true);
+  });
+
+  it('overdueOccurrences：包含 fixed/deadline、排除已完成、同刻按标题排序', () => {
+    expect(tasks.overdueOccurrences()).toEqual([]);
+
+    const pastKey = addDays(today(), -2)!;
+    const fixed = tasks.createTask({
+      title: 'fixed-past',
+      kind: 'fixed',
+      recurrence: weeklyRule({ freq: 'daily', interval: 1, dtstart: pastKey, count: 1 }),
+    })!;
+
+    const due = toLocalDateTime(new Date(Date.now() - 2 * 3600e3));
+    deadlineTask('b', due);
+    deadlineTask('a', due);
+
+    const doneDeadline = deadlineTask('done', due);
+    tasks.toggleCompletion(doneDeadline.id, due);
+
+    const all = tasks.overdueOccurrences();
+    expect(all.map((item) => item.task.title)).toEqual(['fixed-past', 'a', 'b']);
+    expect(all.some((item) => item.task.id === doneDeadline.id)).toBe(false);
+
+    tasks.toggleCompletion(fixed.id, pastKey);
+    expect(tasks.overdueOccurrences().some((item) => item.task.id === fixed.id)).toBe(false);
+  });
+
+  it('overdueOccurrences：只有未来任务时返回空列表', () => {
+    deadlineTask('future', toLocalDateTime(new Date(Date.now() + 24 * 3600e3)));
+    expect(tasks.overdueOccurrences()).toEqual([]);
+  });
+
+  it('extendTimelinePast：到最早返回 false，命中分页块返回 true/false', () => {
+    expect(tasks.extendTimelinePast('2026-09-10', '2026-09-10')).toEqual({
+      key: '2026-09-10',
+      hasMore: false,
+      found: false,
+    });
+
+    // 没有任何任务时，向上扫描到 earliest 也找不到内容。
+    const anchor = today();
+    const none = tasks.extendTimelinePast(addDays(anchor, 3)!, anchor);
+    expect(none).toEqual({ key: anchor, hasMore: false, found: false });
+
+    // earliest 在更早，当前块命中 9/7，且还有更早的历史。
+    deadlineTask('early', '2026-01-01T10:00');
+    deadlineTask('mid', '2026-09-07T10:00');
+    const found = tasks.extendTimelinePast('2026-09-28', '2026-01-01');
+    expect(found.found).toBe(true);
+    expect(found.hasMore).toBe(true);
+    expect(found.key).toBe('2026-09-07');
+
+    // 再往前只有 1/1 一个日期，且它等于 earliest，hasMore 应收敛为 false。
+    const last = tasks.extendTimelinePast(found.key, '2026-01-01');
+    expect(last.found).toBe(true);
+    expect(last.key).toBe('2026-01-01');
+    expect(last.hasMore).toBe(false);
+  });
+
+  it('extendTimelineFuture：命中未来日期，或扫描到上限后停止', () => {
+    const anchor = today();
+    const futureKey = addDays(anchor, 3)!;
+    deadlineTask('future', `${futureKey}T10:00`);
+    const found = tasks.extendTimelineFuture(anchor);
+    expect(found.found).toBe(true);
+    expect(found.hasMore).toBe(true);
+    expect(found.key).toBe(addDays(anchor, 21)!);
+  });
+
+  it('extendTimelineFuture：没有未来内容时返回 false', () => {
+    const anchor = today();
+    const none = tasks.extendTimelineFuture(anchor);
+    expect(none.found).toBe(false);
+    expect(none.hasMore).toBe(false);
+    expect(none.key).toBe(addDays(anchor, 366 * 10)!);
   });
 });

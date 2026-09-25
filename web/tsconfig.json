@@ -29,10 +29,14 @@
     "baseUrl": ".",
     "paths": {
       "@/*": [
-        "src/*"
+        "src/*",
+        "node_modules/ink-design/src/*"
       ],
       "@shared/*": [
         "../shared/*"
+      ],
+      "ink-design": [
+        "node_modules/ink-design/src/index.ts"
       ]
     }
   },

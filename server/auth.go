@@ -1,11 +1,11 @@
 // 身份验证：登录、会话、锁定退避、改密。
 //
 // 安全设计要点：
-// - 会话令牌拆成 `id.secret`：id 用于 O(1) 查表，secret 只存 sha256，
-//   库被读走也无法反推出可用的令牌。两者都用高熵随机数。
-// - 恒定响应：无论密码错、账户被锁还是库异常，错误码不泄漏账户存在性。
-// - 双层退避：账户级锁定（持久化，防重启绕过）+ IP 级限流（内存，防跨账户探测）。
-// - 改密即吊销其它所有会话，但保留当前设备，避免"改完自己也被踢"。
+//   - 会话令牌拆成 `id.secret`：id 用于 O(1) 查表，secret 只存 sha256，
+//     库被读走也无法反推出可用的令牌。两者都用高熵随机数。
+//   - 恒定响应：无论密码错、账户被锁还是库异常，错误码不泄漏账户存在性。
+//   - 双层退避：账户级锁定（持久化，防重启绕过）+ IP 级限流（内存，防跨账户探测）。
+//   - 改密即吊销其它所有会话，但保留当前设备，避免"改完自己也被踢"。
 package main
 
 import (
@@ -50,26 +50,38 @@ func ipBucketOf(ip string) *ipBucket {
 	return b
 }
 
-// checkIpThrottle 超限则按指数退避封锁该 IP。
-func checkIpThrottle(ip string) *AppError {
+// reserveIpAttempt 在 bcrypt 校验前预占一次登录尝试名额。
+//
+// 旧实现是“先检查、后 bcrypt、失败再计数”，并发请求会在计数前全部穿过限流。
+// 这里把预占和检查放在同一个锁里，超过上限的请求直接 429。
+// 返回的时间戳供登录成功时释放；失败或账户锁定时保留。
+func reserveIpAttempt(ip string) (int64, *AppError) {
 	ipMu.Lock()
 	defer ipMu.Unlock()
 	b := ipBucketOf(ip)
 	t := nowMs()
 	if b.blockedUntil > t {
-		return E.Throttled(int((b.blockedUntil - t + 999) / 1000))
+		return 0, E.Throttled(int((b.blockedUntil - t + 999) / 1000))
 	}
 	if len(b.hits) >= ipMaxAttempts {
 		b.blockedUntil = t + ipBlockMs
-		return E.Throttled(int(ipBlockMs / 1000))
+		return 0, E.Throttled(int(ipBlockMs / 1000))
 	}
-	return nil
+	b.hits = append(b.hits, t)
+	return t, nil
 }
 
-func recordIpAttempt(ip string) {
+// releaseIpAttempt 登录成功时释放预占名额，避免正常登录被计入风控。
+func releaseIpAttempt(ip string, at int64) {
 	ipMu.Lock()
 	defer ipMu.Unlock()
-	ipBucketOf(ip).hits = append(ipBucketOf(ip).hits, nowMs())
+	b := ipBucketOf(ip)
+	for i, ts := range b.hits {
+		if ts == at {
+			b.hits = append(b.hits[:i], b.hits[i+1:]...)
+			return
+		}
+	}
 }
 
 // ResetThrottle 单测与维护用：清空限流状态。
@@ -82,13 +94,13 @@ func ResetThrottle() {
 // ───────────────────────── 设备 ─────────────────────────
 
 type Device struct {
-	ID          string
-	Name        string
-	Platform    sql.NullString
-	CreatedAt   int64
-	LastSeenAt  int64
-	PushCount   int64
-	PullCount   int64
+	ID         string
+	Name       string
+	Platform   sql.NullString
+	CreatedAt  int64
+	LastSeenAt int64
+	PushCount  int64
+	PullCount  int64
 }
 
 func nowMs() int64 { return time.Now().UnixMilli() }
@@ -444,8 +456,9 @@ func getAccount(db *sql.DB) (*Account, *AppError) {
 
 // login 校验密码并建立会话。
 func login(db *sql.DB, password, deviceID, deviceName, userAgent, ip string) (token string, device *Device, sess *Session, apiErr *AppError) {
-	if err := checkIpThrottle(ip); err != nil {
-		return "", nil, nil, err
+	reservedAt, apiErr := reserveIpAttempt(ip)
+	if apiErr != nil {
+		return "", nil, nil, apiErr
 	}
 	acct, apiErr := getAccount(db)
 	if apiErr != nil {
@@ -455,31 +468,44 @@ func login(db *sql.DB, password, deviceID, deviceName, userAgent, ip string) (to
 
 	if acct.LockedUntil > t {
 		retryAfterSec := int((acct.LockedUntil - t + 999) / 1000)
-		audit(db, "login.blocked", "账户处于锁定期", ip, "")
 		return "", nil, nil, E.Locked(retryAfterSec)
 	}
 
 	if !verifyPassword(password, acct.PasswordHash) {
-		recordIpAttempt(ip)
-		failed := acct.FailedAttempts + 1
-		lockedUntil := int64(0)
+		// 原子自增，避免并发失败请求基于同一个旧 failed_attempts 互相覆盖。
+		var failed int64
+		if err := db.QueryRow(
+			`UPDATE account SET failed_attempts = failed_attempts + 1 WHERE id = 1 RETURNING failed_attempts`,
+		).Scan(&failed); err != nil {
+			return "", nil, nil, internalErr(err)
+		}
 		if int(failed) >= Auth.LockoutThreshold {
 			over := int(failed) - Auth.LockoutThreshold
 			delay := Auth.LockoutBaseMs << over
 			if delay > Auth.LockoutMaxMs || delay <= 0 {
 				delay = Auth.LockoutMaxMs
 			}
-			lockedUntil = t + delay
+			lockedUntil := nowMs() + delay
+			if _, err := db.Exec(
+				`UPDATE account SET locked_until = CASE WHEN ? > locked_until THEN ? ELSE locked_until END WHERE id = 1`,
+				lockedUntil, lockedUntil,
+			); err != nil {
+				return "", nil, nil, internalErr(err)
+			}
 		}
-		db.Exec("UPDATE account SET failed_attempts = ?, locked_until = ? WHERE id = 1", failed, lockedUntil)
+		var lockedUntil int64
+		if err := db.QueryRow("SELECT locked_until FROM account WHERE id = 1").Scan(&lockedUntil); err != nil {
+			return "", nil, nil, internalErr(err)
+		}
 		audit(db, "login.failed", "连续失败 "+itoa(int(failed))+" 次", ip, deviceID)
-		if lockedUntil > t {
-			return "", nil, nil, E.Locked(int((lockedUntil - t + 999) / 1000))
+		if lockedUntil > nowMs() {
+			return "", nil, nil, E.Locked(int((lockedUntil - nowMs() + 999) / 1000))
 		}
 		return "", nil, nil, E.BadCredentials()
 	}
 
-	// 成功：清零失败计数，必要时透明升级哈希代价
+	// 成功：释放预占名额，清零失败计数，必要时透明升级哈希代价
+	releaseIpAttempt(ip, reservedAt)
 	db.Exec("UPDATE account SET failed_attempts = 0, locked_until = 0, last_login_at = ? WHERE id = 1", t)
 	if needsRehash(acct.PasswordHash) {
 		db.Exec("UPDATE account SET password_hash = ?, password_rounds = ?, password_updated_at = ? WHERE id = 1",

@@ -9,11 +9,12 @@
  * 会留下一个空的 dueAt，用户点保存才被告知缺字段。
  */
 import { useEffect, useMemo, useState } from 'react';
+import { Button, Chip, Input, SegmentedControl, Tag } from 'ink-design';
 import { useEditorStore } from '@/stores/editor';
 import { allTags as allTagsOf, deleteTask } from '@/stores/tasks';
 import { useRepoRev } from '@/hooks/useSyncTick';
 import { notify, useUiStore } from '@/stores/ui';
-import { DEFAULT_TAGS, type Recurrence, type Task } from '@/lib/types';
+import { DEFAULT_TAGS, type Priority, type Recurrence, type Task } from '@/lib/types';
 import { addDays, todayKey, WEEKDAY_FULL, isoWeekday } from '@/lib/datetime';
 import { useNow } from '@/hooks/useNow';
 import Sheet from './Sheet';
@@ -216,64 +217,42 @@ export default function TaskEditor() {
       footer={
         <>
           {isEdit && (
-            <button className="btn btn--danger btn--sm te__del" type="button" onClick={onDelete}>
-              <Icon name="trash" size={15} />
+            <Button ghost className="te__del" onClick={onDelete} icon={<Icon name="trash" size={15} />}>
               删除
-            </button>
+            </Button>
           )}
           <span className="te__spacer" />
-          <button className="btn" type="button" onClick={() => close()}>
-            取消
-          </button>
+          <Button onClick={() => close()}>取消</Button>
           {!isEdit && (
-            <button
-              className="btn"
-              type="button"
-              disabled={!draft.title.trim()}
-              onClick={saveAndNew}
-            >
+            <Button disabled={!draft.title.trim()} onClick={saveAndNew}>
               保存并继续
-            </button>
+            </Button>
           )}
-          <button
-            className="btn btn--primary"
-            type="button"
-            disabled={!draft.title.trim() || saving}
-            onClick={onSave}
-          >
+          <Button primary disabled={!draft.title.trim() || saving} onClick={onSave}>
             保存
-          </button>
+          </Button>
         </>
       }
     >
       <div className="te">
         {/* 类型 */}
-        <div className="seg seg--block">
-          <button
-            className={`seg__item${draft.kind === 'deadline' ? ' is-on' : ''}`}
-            type="button"
-            onClick={() => setKind('deadline')}
-          >
-            <Icon name="clock" size={15} />
-            截止时间
-          </button>
-          <button
-            className={`seg__item${draft.kind === 'fixed' ? ' is-on' : ''}`}
-            type="button"
-            onClick={() => setKind('fixed')}
-          >
-            <Icon name="repeat" size={15} />
-            固定时段
-          </button>
-        </div>
+        <SegmentedControl
+          className="seg--block"
+          value={draft.kind}
+          onChange={(value) => setKind(value as 'deadline' | 'fixed')}
+          options={[
+            { value: 'deadline', label: (<><Icon name="clock" size={15} />截止时间</>) },
+            { value: 'fixed', label: (<><Icon name="repeat" size={15} />固定时段</>) },
+          ]}
+        />
 
         {/* 标题 */}
         <div className="field">
           <label htmlFor="te-title">标题</label>
-          <input
+          <Input
             id="te-title"
+            variant="box"
             value={draft.title}
-            type="text"
             maxLength={200}
             placeholder="要做什么？"
             onChange={(e) => setDraft({ ...draft, title: e.target.value })}
@@ -298,35 +277,21 @@ export default function TaskEditor() {
                   />
                 </div>
               )}
-              <div className="seg seg--sm due__mode">
-                <button
-                  className={`seg__item${!draft.allDay ? ' is-on' : ''}`}
-                  type="button"
-                  aria-pressed={!draft.allDay}
-                  onClick={() => setAllDay(false)}
-                >
-                  指定时间
-                </button>
-                <button
-                  className={`seg__item${draft.allDay ? ' is-on' : ''}`}
-                  type="button"
-                  aria-pressed={draft.allDay}
-                  onClick={() => setAllDay(true)}
-                >
-                  全天
-                </button>
-              </div>
+              <SegmentedControl
+                className="seg--sm due__mode"
+                value={draft.allDay ? 'allDay' : 'time'}
+                onChange={(value) => setAllDay(value === 'allDay')}
+                options={[
+                  { value: 'time', label: '指定时间' },
+                  { value: 'allDay', label: '全天' },
+                ]}
+              />
             </div>
             <div className="presets">
               {duePresets.map((p) => (
-                <button
-                  key={p.label}
-                  className={`chip chip--btn${dueDate === p.date ? ' is-on' : ''}`}
-                  type="button"
-                  onClick={() => setDueDate(p.date)}
-                >
+                <Chip key={p.label} selected={dueDate === p.date} onClick={() => setDueDate(p.date)}>
                   {p.label}
-                </button>
+                </Chip>
               ))}
             </div>
             {dueHint && (
@@ -352,18 +317,12 @@ export default function TaskEditor() {
         {/* 优先级 */}
         <div className="field">
           <label>优先级</label>
-          <div className="seg seg--sm">
-            {PRIORITIES.map((p) => (
-              <button
-                key={p.value}
-                className={`seg__item${draft.priority === p.value ? ' is-on' : ''}`}
-                type="button"
-                onClick={() => setDraft({ ...draft, priority: p.value })}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            className="seg--sm"
+            value={draft.priority}
+            onChange={(value) => setDraft({ ...draft, priority: value as Priority })}
+            options={PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
+          />
         </div>
 
         {/* 标签 */}
@@ -371,23 +330,15 @@ export default function TaskEditor() {
           <label>标签</label>
           <div className="tags">
             {draft.tags.map((t) => (
-              <span key={t} className="chip chip--on">
+              <Tag key={t} closable onClose={() => removeTag(t)}>
                 {t}
-                <button
-                  className="chip__x"
-                  type="button"
-                  aria-label={`移除 ${t}`}
-                  onClick={() => removeTag(t)}
-                >
-                  <Icon name="x" size={11} />
-                </button>
-              </span>
+              </Tag>
             ))}
-            <input
+            <Input
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               className="tags__input"
-              type="text"
+              variant="box"
               placeholder="添加标签后回车"
               maxLength={20}
               onKeyDown={(e) => {
@@ -401,9 +352,9 @@ export default function TaskEditor() {
           {tagSuggestions.length > 0 && (
             <div className="presets">
               {tagSuggestions.map((t) => (
-                <button key={t} className="chip chip--btn" type="button" onClick={() => addTag(t)}>
+                <Chip key={t} onClick={() => addTag(t)}>
                   + {t}
-                </button>
+                </Chip>
               ))}
             </div>
           )}
@@ -412,8 +363,10 @@ export default function TaskEditor() {
         {/* 备注 */}
         <div className="field">
           <label htmlFor="te-notes">备注</label>
-          <textarea
+          <Input
             id="te-notes"
+            variant="box"
+            multiline
             value={draft.notes}
             maxLength={5000}
             placeholder="补充说明（可选）"

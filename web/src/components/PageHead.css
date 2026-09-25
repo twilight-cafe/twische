@@ -15,6 +15,7 @@
 }
 
 .ph__sub {
+  display: block;
   margin-top: 4px;
   font-size: 13px;
   color: var(--mut);

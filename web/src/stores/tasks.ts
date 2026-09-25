@@ -147,6 +147,155 @@ export function overdueDeadlines(limit = 20): OccurrenceWithTask[] {
     .slice(0, limit);
 }
 
+
+// ── 今日无限时间线 ──
+
+/** 按日分页时每次扫描的日历天数。 */
+const TIMELINE_CHUNK_DAYS = 21;
+/** 找不到未来日程时，最多向未来扫描 10 年再判定“没有更多”。 */
+const TIMELINE_FUTURE_SCAN_DAYS = 366 * 10;
+
+export interface DayGroup {
+  /** 该组按“结束日期”归属：跨夜任务算结束那天（见 occurrenceEndDateKey）。 */
+  dateKey: string;
+  items: OccurrenceWithTask[];
+}
+
+export interface TimelineExtendResult {
+  key: string;
+  /** 该方向是否还可能继续加载。 */
+  hasMore: boolean;
+  /** 本次扫描是否找到了新的有内容日期。 */
+  found: boolean;
+}
+
+/** 任务的归属日期：跨夜任务归属于结束日，其余归属于 dateKey。 */
+export function occurrenceEndDateKey(occ: Occurrence): string {
+  return occ.endsOnNextDay || occ.dateKey;
+}
+
+/**
+ * [fromKey, toKey] 内按结束日期分组的所有 occurrence。
+ *
+ * `expandRange` 只按开始日期筛数据；跨夜任务可能从前一天开始，因此要往前多吃一天，
+ * 再用结束日期过滤回来。空日期不会产生分组，供 UI 直接渲染即可。
+ */
+export function dayGroupsBetween(fromKey: string, toKey: string): DayGroup[] {
+  if (!fromKey || !toKey || fromKey > toKey) return [];
+
+  const groups = new Map<string, OccurrenceWithTask[]>();
+  const scanFrom = addDaysKey(fromKey, -1);
+  for (const item of expandRange(scanFrom, toKey)) {
+    const key = occurrenceEndDateKey(item.occurrence);
+    if (key < fromKey || key > toKey) continue;
+    const list = groups.get(key);
+    if (list) list.push(item);
+    else groups.set(key, [item]);
+  }
+
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dateKey, items]) => ({ dateKey, items }));
+}
+
+/** 所有开放任务中最早可能出现日程的日期；没有可用任务时回退到今天。 */
+export function earliestTaskDateKey(): string {
+  const today = todayKey();
+  let earliest: string | null = null;
+
+  for (const task of listTasks()) {
+    if (task.status === 'archived') continue;
+    let key: string | null = null;
+    if (task.kind === 'deadline') {
+      key = task.dueAt ? task.dueAt.slice(0, 10) : null;
+    } else if (task.recurrence?.dtstart) {
+      key = task.recurrence.dtstart;
+    }
+    if (!key || !/^\d{4}-\d{2}-\d{2}$/.test(key)) continue;
+    if (!earliest || key < earliest) earliest = key;
+  }
+
+  return earliest ?? today;
+}
+
+/** 未来是否还有开放任务可能产生日程；用于避免列表在空未来里无限扫描。 */
+export function hasFutureTaskCandidates(): boolean {
+  const now = Date.now();
+  const today = todayKey();
+
+  for (const task of listTasks()) {
+    if (task.status === 'archived') continue;
+    if (task.kind === 'deadline') {
+      if (task.dueAt && new Date(task.dueAt).getTime() > now) return true;
+      continue;
+    }
+
+    const r = task.recurrence;
+    if (!r) continue;
+    // 没有结束条件的固定任务会一直展开，必然有未来。
+    if (!r.until && r.count === null) return true;
+    if (r.until && r.until >= today) return true;
+    if (r.count !== null && r.count > 0) return true;
+  }
+
+  return false;
+}
+
+/**
+ * 已逾期：所有未完成、结束时间已过去的 occurrence（fixed / deadline 都在内）。
+ * 返回完整列表，由调用方按 3 条/页分页。
+ */
+export function overdueOccurrences(): OccurrenceWithTask[] {
+  const today = todayKey();
+  const earliest = earliestTaskDateKey();
+  if (earliest > today) return [];
+
+  const now = Date.now();
+  return expandRange(earliest, today)
+    .filter(({ occurrence }) => !occurrence.done && occurrence.endAt.getTime() < now)
+    .sort((a, b) => {
+      const d = a.occurrence.endAt.getTime() - b.occurrence.endAt.getTime();
+      if (d !== 0) return d;
+      return a.task.title.localeCompare(b.task.title, 'zh-Hans-CN');
+    });
+}
+
+/** 从 fromKey 往过去扫描一个分页块，直到找到有内容的日期或到达 earliest。 */
+export function extendTimelinePast(fromKey: string, earliestKey: string): TimelineExtendResult {
+  if (fromKey <= earliestKey) return { key: earliestKey, hasMore: false, found: false };
+
+  let cursor = fromKey;
+  while (cursor > earliestKey) {
+    const next = addDaysKey(cursor, -TIMELINE_CHUNK_DAYS);
+    const key = next < earliestKey ? earliestKey : next;
+    const groups = dayGroupsBetween(key, addDaysKey(cursor, -1));
+    cursor = key;
+    if (groups.length > 0) {
+      return { key, hasMore: key > earliestKey, found: true };
+    }
+  }
+
+  return { key: earliestKey, hasMore: false, found: false };
+}
+
+/** 从 toKey 往未来扫描一个分页块，直到找到有内容的日期或达到 10 年上限。 */
+export function extendTimelineFuture(toKey: string): TimelineExtendResult {
+  let cursor = toKey;
+  let scanned = 0;
+
+  while (scanned < TIMELINE_FUTURE_SCAN_DAYS) {
+    const step = Math.min(TIMELINE_CHUNK_DAYS, TIMELINE_FUTURE_SCAN_DAYS - scanned);
+    const next = addDaysKey(cursor, step);
+    const groups = dayGroupsBetween(addDaysKey(cursor, 1), next);
+    cursor = next;
+    scanned += step;
+    if (groups.length > 0) return { key: next, hasMore: true, found: true };
+  }
+
+  return { key: cursor, hasMore: false, found: false };
+}
+
+
 // ── 写操作 ──
 
 export function createTask(input: Partial<Task>): Task | null {

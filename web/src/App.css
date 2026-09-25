@@ -59,6 +59,55 @@
   letter-spacing: 0.04em;
 }
 
+/* ── 后台校验中的弱提示 ──
+   界面此时已完全可用，所以这块必须不拦截任何点击（pointer-events: none），
+   位置放在底部中央，避开导航与主内容区。 */
+.connecting {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--mut);
+  font-size: 12.5px;
+  pointer-events: none;
+  box-shadow: 0 8px 24px -12px color-mix(in srgb, var(--fg) 32%, transparent);
+}
+
+.connecting__spin {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--line-strong);
+  border-top-color: var(--fg);
+  border-radius: 50%;
+  animation: connecting-spin 0.7s linear infinite;
+}
+
+@keyframes connecting-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 有更新提示条时让位，避免两条浮动元素叠在一起 */
+.update-bar ~ .connecting,
+.connecting:has(~ .update-bar) {
+  bottom: calc(env(safe-area-inset-bottom) + 64px);
+}
+
+@media (max-width: 767px) {
+  .connecting {
+    bottom: calc(var(--shell-tabbar) + env(safe-area-inset-bottom) + 16px);
+  }
+}
+
 /* ── 致命错误 ── */
 .fatal {
   display: grid;

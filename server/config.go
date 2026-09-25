@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-const Version = "1.0.0"
+const Version = "1.0.2"
 
 // 仓库根目录：优先 TWISCHE_ROOT，其次从工作目录向上找同时含 web/ 与 server/ 的目录。
 func findRoot() string {

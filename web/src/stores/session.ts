@@ -6,6 +6,12 @@
  *   need-init     —— 服务端没跑过 `twische init`，前端无能为力，只能给命令行指引
  *   need-login    —— 已初始化但未登录
  *   ready         —— 可用
+ *   error         —— 连不上且本地无可用数据
+ *
+ * 「先给界面，再对答案」：本机登录过的设备启动时不必等网络。
+ * 本地仓库（IndexedDB）是唯一数据源，界面完全可以离线渲染；
+ * 服务端探测只是「校验 + 补齐」，是后台动作，绝不能挡住首屏。
+ * 这一点在弱网下尤其关键 —— 能连上但很慢的服务端会让串行等待变成十几秒白屏。
  */
 import { create } from 'zustand';
 import { api, ApiError, type AccountInfo, type DeviceInfo, type StatsInfo } from '@/lib/api';
@@ -48,6 +54,14 @@ interface SessionState {
   initializedAt: number | null;
   bootError: string;
   offlineMode: boolean;
+  /**
+   * 本轮的会话是否已被服务端确认过。
+   *
+   * false 有两种可能：一是还在后台校验中（`status` 已是 ready，界面照常用），
+   * 二是校验失败但本机有已认证过的数据，于是降级为离线继续用。
+   * 界面据此显示一个"连接中"的弱提示，而不是把用户挡在启动页外面。
+   */
+  sessionVerified: boolean;
   devices: DeviceInfo[];
   account: AccountInfo | null;
   stats: StatsInfo | null;
@@ -63,6 +77,10 @@ interface SessionState {
 
 interface SessionActions {
   bootstrap(): Promise<void>;
+  /** 首次启动的完整探测（无本地可信会话时） */
+  probeSession(): Promise<void>;
+  /** 后台会话校验（已有本地可信会话时，界面已可用） */
+  verifySession(): Promise<void>;
   retrySession(): Promise<boolean>;
   login(password: string): Promise<boolean>;
   logout(): Promise<void>;
@@ -155,6 +173,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     initializedAt: null,
     bootError: '',
     offlineMode: false,
+    sessionVerified: false,
     devices: [],
     account: null,
     stats: null,
@@ -182,21 +201,73 @@ export const useSessionStore = create<SessionStore>((set, get) => {
       settlePasswordQueue(null);
     },
 
-    /** 启动流程：先问服务端"你初始化了吗"，再问"我是谁"。 */
+    /**
+     * 启动流程。
+     *
+     * 关键顺序（决定了弱网下的体感）：**先把本地界面立起来，再去问服务端**。
+     * 本机登录过的设备（`wasAuthed()`）不需要等 `api.status()` 往返就能进主界面 ——
+     * IndexedDB 里已经有全部数据，服务端只负责"校验身份 + 补齐增量"。
+     * 因此这里先 `initRepo()` 并直接置 ready，随后把探测丢进后台；
+     * 只有探测结果**否定**本地状态时（未初始化 / 登录失效）才回退界面。
+     *
+     * 旧实现是串行 `await status → initRepo → await session`，在"能连上但很慢"
+     * 的服务端上会白屏到 16s（两个 8s 超时），而断网时 fetch 立刻失败反而秒开 ——
+     * 这正是"联网卡、断网不卡"这个反直觉现象的来源。
+     */
     async bootstrap() {
+      const trusted = wasAuthed();
+      set({ status: 'checking', bootError: '', sessionVerified: false });
+
+      // ── 快路径：曾登录过 → 立刻用本地数据进主界面，网络探测转后台 ──
+      if (trusted) {
+        try {
+          await initRepo();
+          set({ status: 'ready', sessionVerified: false });
+          bindOnlineListeners();
+
+          // 校验与补齐全部在后台跑；期间界面已经可用，用户不必等
+          void get().verifySession();
+          return;
+        } catch {
+          // 本地仓库都起不来，退回慢路径，让它去决定是登录页还是错误页
+        }
+      }
+
+      // ── 慢路径：首次使用或本地仓库不可用，只能等服务端给答案 ──
+      await get().probeSession();
+    },
+
+    /**
+     * 首次启动的完整探测：必须知道"服务端初始化了吗 / 我是谁"才能决定渲染什么。
+     * 只在本机没有可信会话时走这条路。
+     *
+     * 三个动作里，只有"读取本地库"不依赖网络，所以让它与 `api.status()` 并行跑，
+     * 首次访问的等待时间就从"两段相加"降为"取较慢的一段"。
+     * 本地库必须先就绪才能置 ready —— 界面渲染出来却没有数据源是更糟的体验。
+     */
+    async probeSession() {
       set({ status: 'checking', bootError: '' });
+
+      // 本地库读取不依赖网络，先并行起来；失败也先记着，等确定了服务端状态再决定怎么办
+      const repoPromise = initRepo().then(
+        () => null,
+        (err: unknown) => err,
+      );
 
       try {
         const health = await api.status();
         set({ serverVersion: health.version, initializedAt: health.initializedAt });
 
+        const repoErr = await repoPromise;
+
         if (!health.initialized) {
+          // 未初始化优先于本地库故障：用户要看到的是"去跑 twische init"这条指引
           set({ status: 'need-init' });
           return;
         }
 
-        // 本地仓库先就绪，后面无论在线与否界面都有数据可渲染
-        await initRepo();
+        // 本地仓库起不来就没有数据源，界面渲染出来也是空的，直接给错误指引
+        if (repoErr) throw repoErr;
 
         try {
           const sess = await api.session();
@@ -204,6 +275,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
             elevated: !!sess.session.elevated,
             elevatedUntil: sess.session.elevatedUntil ?? 0,
             status: 'ready',
+            sessionVerified: true,
             offlineMode: false,
           });
           markAuthed();
@@ -220,23 +292,83 @@ export const useSessionStore = create<SessionStore>((set, get) => {
       } catch (err) {
         // 网络不通 ≠ 一切失败：本机若有已认证过的数据，就进入离线模式继续用。
         // 第一次使用（本地什么都没有）才真正无路可走，落到错误指引。
-        if (err instanceof ApiError && err.isNetwork && wasAuthed()) {
-          try {
-            await initRepo();
-            set({ status: 'ready', offlineMode: true });
-            bindOnlineListeners();
-            // 试一次同步：失败会置 syncState.online=false 并按退避重试，
-            // 恢复联网后由 online 侦听自动收尾。
-            void syncNow({ silent: true });
-            return;
-          } catch {
-            /* 本地仓库也起不来，只能走错误指引 */
-          }
+        // 注意本地库此时已经就绪（否则上面已经抛出了），无需再 await。
+        if (err instanceof ApiError && err.isNetwork && wasAuthed() && !(await repoPromise)) {
+          set({ status: 'ready', sessionVerified: false, offlineMode: true });
+          bindOnlineListeners();
+          // 试一次同步：失败会置 syncState.online=false 并按退避重试，
+          // 恢复联网后由 online 侦听自动收尾。
+          void syncNow({ silent: true });
+          return;
         }
         set({
           bootError: err instanceof Error ? err.message : String(err),
           status: 'error',
         });
+      }
+    },
+
+    /**
+     * 后台会话校验（快路径专用）。
+     *
+     * 界面此刻已经是 ready 并渲染着本地数据，这个函数只做两件事：
+     *   - 确认成功 → 补上版本号、设备列表，并触发一次同步
+     *   - 确认失败 → 把界面**降级**到正确的状态（未初始化 / 登录失效 / 离线）
+     *
+     * 失败一律安静处理，绝不打断用户正在做的事。网络类失败尤其不重要 ——
+     * 本地优先架构下它只是"暂时没对齐"，恢复联网后 sync 层会自己收尾。
+     */
+    async verifySession() {
+      const toOffline = (err: unknown): void => {
+        // 网络类失败：保持 ready，转为离线模式继续用本地数据。
+        // 非网络类失败同样不该把用户踢出界面 —— 本地数据是有效的。
+        const offline = err instanceof ApiError && err.isNetwork;
+        set({ sessionVerified: false, offlineMode: offline });
+        if (offline) {
+          bindOnlineListeners();
+          void syncNow({ silent: true });
+        }
+      };
+
+      try {
+        const health = await api.status();
+        if (!health.initialized) {
+          // 服务端被重置过：本地那份数据已经没有归宿，必须说清楚
+          set({ serverVersion: health.version, initializedAt: health.initializedAt, status: 'need-init' });
+          return;
+        }
+        set({ serverVersion: health.version, initializedAt: health.initializedAt });
+
+        let sess;
+        try {
+          sess = await api.session();
+        } catch (err) {
+          if (err instanceof ApiError && err.isAuth) {
+            // 会话确实失效了才回登录页；这时的回退是有意义的，不是误伤
+            clearAuthed();
+            set({ status: 'need-login', sessionVerified: false });
+            resetElevation();
+            return;
+          }
+          toOffline(err);
+          return;
+        }
+
+        // 探测期间用户可能已经手动登出或登录，别把状态覆盖回去。
+        // 这里只落"会话确认"这一件事，设备列表与同步一并收尾即可，
+        // 避免同一轮启动把 session/sync/devices 各打两遍。
+        if (get().status !== 'ready') return;
+        set({
+          elevated: !!sess.session.elevated,
+          elevatedUntil: sess.session.elevatedUntil ?? 0,
+          sessionVerified: true,
+          offlineMode: false,
+        });
+        markAuthed();
+        void get().refreshDevices();
+        void syncNow({ silent: true });
+      } catch (err) {
+        toOffline(err);
       }
     },
 
@@ -254,7 +386,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
           elevatedUntil: sess.session.elevatedUntil ?? 0,
         });
         await initRepo();
-        set({ status: 'ready', offlineMode: false });
+        set({ status: 'ready', sessionVerified: true, offlineMode: false });
         markAuthed();
         bindOnlineListeners();
         void get().refreshDevices();
@@ -275,7 +407,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
       try {
         await initRepo();
         await api.login(password, repo.deviceId, repo.deviceName);
-        set({ status: 'ready', offlineMode: false });
+        set({ status: 'ready', sessionVerified: true, offlineMode: false });
         markAuthed();
         syncState.unauthorized = false;
         bindOnlineListeners();
@@ -335,6 +467,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
         account: null,
         stats: null,
         offlineMode: false,
+        sessionVerified: false,
         status: 'need-login',
       });
       clearAuthed();
@@ -352,7 +485,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
         const res = await api.logoutAll();
         stopSync();
         await wipeLocal(false);
-        set({ devices: [], offlineMode: false, status: 'need-login' });
+        set({ devices: [], offlineMode: false, sessionVerified: false, status: 'need-login' });
         clearAuthed();
         resetElevation();
         notify.ok('已在所有设备上退出', `共吊销 ${res.revokedSessions} 个会话`);
@@ -465,7 +598,8 @@ export const useSessionStore = create<SessionStore>((set, get) => {
   subscribeSync(() => {
     const s = useSessionStore.getState();
     if (syncState.unauthorized && s.status === 'ready') {
-      useSessionStore.setState({ status: 'need-login' });
+      clearAuthed();
+      useSessionStore.setState({ status: 'need-login', sessionVerified: false });
       notify.warn('登录状态已失效', '请重新输入密码');
     }
     if (syncState.online && s.offlineMode) {

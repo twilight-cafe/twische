@@ -7,6 +7,7 @@
  *   <768px   顶部栏 + 底部标签栏 —— 底部才是拇指可达区
  */
 import { NavLink, useLocation } from 'react-router-dom';
+import { Button } from 'ink-design';
 import type { ReactNode } from 'react';
 import { useUiStore } from '@/stores/ui';
 import Icon from './Icon';
@@ -56,10 +57,14 @@ export default function AppShell({ title, onNewTask, children }: AppShellProps) 
           </span>
         </NavLink>
 
-        <button className="btn btn--primary new-btn" type="button" onClick={onNewTask}>
-          <Icon name="plus" size={16} />
+        <Button
+          primary
+          className="new-btn"
+          onClick={onNewTask}
+          icon={<Icon name="plus" size={16} />}
+        >
           <span className="new-btn__label">新建任务</span>
-        </button>
+        </Button>
 
         <nav className="nav" aria-label="主导航">
           {NAV.map((item) => (
@@ -77,25 +82,25 @@ export default function AppShell({ title, onNewTask, children }: AppShellProps) 
 
         <div className="shell__nav-foot">
           <SyncBadge />
-          <button
+          <Button
+            ghost
             className="foot-btn"
-            type="button"
             title={`外观：${themeLabel}`}
             onClick={cycleTheme}
+            icon={<Icon name={themeIcon} size={16} />}
           >
-            <Icon name={themeIcon} size={16} />
             <span className="foot-btn__label">{themeLabel}</span>
-          </button>
+          </Button>
           {!isStandalone && (
-            <button
+            <Button
+              ghost
               className="foot-btn"
-              type="button"
               title={sidebarCollapsed ? '展开侧栏' : '收起侧栏'}
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              icon={<Icon name="panel-left" size={16} />}
             >
-              <Icon name="panel-left" size={16} />
               <span className="foot-btn__label">{sidebarCollapsed ? '展开' : '收起'}</span>
-            </button>
+            </Button>
           )}
         </div>
       </aside>
@@ -111,14 +116,13 @@ export default function AppShell({ title, onNewTask, children }: AppShellProps) 
         </div>
         <div className="top-actions">
           <SyncBadge compact />
-          <button
+          <Button
+            ghost
             className="icon-btn"
-            type="button"
             title={`外观：${themeLabel}`}
             onClick={cycleTheme}
-          >
-            <Icon name={themeIcon} size={17} />
-          </button>
+            icon={<Icon name={themeIcon} size={17} />}
+          />
         </div>
       </header>
 
@@ -142,9 +146,13 @@ export default function AppShell({ title, onNewTask, children }: AppShellProps) 
       </nav>
 
       {/* 手机端的新建按钮：拇指最容易够到的右下角 */}
-      <button className="fab" type="button" aria-label="新建任务" onClick={onNewTask}>
-        <Icon name="plus" size={22} />
-      </button>
+      <Button
+        primary
+        className="fab"
+        aria-label="新建任务"
+        onClick={onNewTask}
+        icon={<Icon name="plus" size={22} />}
+      />
     </div>
   );
 }

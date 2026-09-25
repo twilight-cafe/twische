@@ -36,6 +36,11 @@
   max-width: 220px;
 }
 
+.rb__number {
+  flex: none;
+  width: 112px;
+}
+
 .rb__hint {
   font-size: 12px;
   color: var(--faint);
@@ -49,6 +54,8 @@
 .wd {
   width: 36px;
   height: 34px;
+  padding: 0;
+  border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   font-size: 13px;
@@ -126,6 +133,8 @@
 }
 .rb__days .cell {
   height: 30px;
+  padding: 0;
+  border-radius: var(--radius);
 }
 
 .rb__months {
@@ -136,6 +145,8 @@
 }
 .rb__months .cell {
   height: 30px;
+  padding: 0;
+  border-radius: var(--radius);
 }
 
 .rb__note {

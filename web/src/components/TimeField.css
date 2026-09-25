@@ -1,111 +1,33 @@
+/* 时间选择器：ink-design TimePicker + 应用侧常用时间快捷项。 */
 .tf {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
   min-width: 0;
 }
 
-.tf__trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
+.tf__picker {
   min-width: 0;
+}
+
+.tf__picker .tp-trigger {
   min-height: 38px;
-  padding: 0 8px 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: var(--bg);
-  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
+  border-color: var(--line-strong);
 }
-.tf__trigger:hover:not(:disabled) {
-  border-color: var(--faint);
-}
-.tf__trigger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.tf__trigger[aria-expanded='true'] {
+
+.tf__picker .tp-trigger:hover,
+.tf__picker.tp-open .tp-trigger,
+.tf__picker:focus-within .tp-trigger {
   border-color: var(--fg);
   background: var(--soft);
 }
 
-.tf--dense .tf__trigger {
+.tf--dense .tf__picker .tp-trigger {
   min-height: 34px;
-}
-
-.tf__value {
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum';
-  letter-spacing: 0.02em;
-}
-
-.tf__caret {
-  display: grid;
-  place-items: center;
-  color: var(--faint);
-}
-
-/* ── 浮层 ── */
-.tf__panel {
-  width: 288px;
-  /* 屏幕很矮时（横屏手机、小笔电）兜底：宁可面板自己滚，也不要溢出可视区 */
-  max-height: calc(100dvh - 24px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.tf__type {
-  position: relative;
-  display: block;
-}
-
-.tf__type input {
-  min-height: 34px;
-  padding: 0 76px 0 10px;
-  font-variant-numeric: tabular-nums;
-}
-
-.tf__type-hint {
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  transform: translateY(-50%);
-  font-size: 11.5px;
-  color: var(--faint);
-  pointer-events: none;
 }
 
 .tf__presets {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-}
-
-.tf__grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 2px;
-}
-.tf__grid .cell {
-  height: 30px;
-}
-
-.tf__foot-hint {
-  flex: 1;
-  font-size: 11.5px;
-  line-height: 1.4;
-  color: var(--faint);
-}
-
-@media (max-width: 699px) {
-  .tf__panel {
-    width: auto;
-  }
-  .tf__grid .cell {
-    height: 36px;
-  }
-  .tf__foot-hint {
-    display: none;
-  }
 }

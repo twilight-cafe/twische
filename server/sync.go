@@ -2,17 +2,18 @@
 //
 // ## 协议
 // `POST /api/sync` 单次往返完成"推 + 拉"：
-//   { deviceId, cursor, limit, push: [ {id, kind, data, vc, updatedAt, deleted} ] }
-//   → { cursor, records, hasMore, serverVector, applied, conflicts, resyncRequired }
+//
+//	{ deviceId, cursor, limit, push: [ {id, kind, data, vc, updatedAt, deleted} ] }
+//	→ { cursor, records, hasMore, serverVector, applied, conflicts, resyncRequired }
 //
 // ## 为什么这样设计
-// 1. 游标 + 向量时钟双判据：游标(seq)负责"我没见过的新记录"，向量时钟负责
-//    "我见过、但看到的不是最新版"。任一被接受的写入都会刷新 seq，因此
-//    `seq > cursor` 就足以覆盖增量；向量时钟则用在 push 侧做因果判定。
-// 2. 冲突必须收敛到同一点：接受写入时统一存 merge(旧, 新) —— 结果同时支配
-//    双方，输家下次推送必然被判为 stale 并被动拉取赢家数据，一次收敛。
-// 3. 幂等：vc 相同的重复推送判为 unchanged，不产生写入、不推进 seq。
-// 4. 墓碑有水位：墓碑被清理后，落后太多的客户端必须走全量重建。
+//  1. 游标 + 向量时钟双判据：游标(seq)负责"我没见过的新记录"，向量时钟负责
+//     "我见过、但看到的不是最新版"。任一被接受的写入都会刷新 seq，因此
+//     `seq > cursor` 就足以覆盖增量；向量时钟则用在 push 侧做因果判定。
+//  2. 冲突必须收敛到同一点：接受写入时统一存 merge(旧, 新) —— 结果同时支配
+//     双方，输家下次推送必然被判为 stale 并被动拉取赢家数据，一次收敛。
+//  3. 幂等：vc 相同的重复推送判为 unchanged，不产生写入、不推进 seq。
+//  4. 墓碑有水位：墓碑被清理后，落后太多的客户端必须走全量重建。
 package main
 
 import (
@@ -141,7 +142,7 @@ func toWire(row *recordRow) wireRecord {
 // validateIncoming 单条入站记录的严格校验。宁可拒绝一条脏数据，也不让它污染向量时钟。
 // raw 是单条 push 元素的原始 JSON。knownDevices 是服务端认可的合法设备标识集合
 // （由 applyPush 在事务内一次性载入）—— 向量时钟的设备键必须落在其中。
-func validateIncoming(raw []byte, knownDevices map[string]bool) (*incomingRecord, *AppError) {
+func validateIncoming(raw []byte, knownDevices map[string]bool, authDeviceID string, serverClocks map[string]uint64) (*incomingRecord, *AppError) {
 	var fields map[string]json.RawMessage
 	if err := decodeWithNumber(raw, &fields); err != nil {
 		return nil, E.BadRequest("记录必须是对象")
@@ -157,9 +158,9 @@ func validateIncoming(raw []byte, knownDevices map[string]bool) (*incomingRecord
 	}
 	// 记录 id 会被写进库、回吐给所有设备、出现在导出文件与 URL 查询里。
 	// 不限制字符集就等于允许控制字符、ANSI 转义、路径片段这类载荷自由流动，
-	// 因此这里收成白名单：字母、数字、连字符、下划线。
+	// 因此这里收成白名单（见 reRecordID 的说明）。
 	if !reRecordID.MatchString(id) {
-		return nil, E.BadRequest("记录 id 只能包含字母、数字、连字符与下划线")
+		return nil, E.BadRequest("记录 id 只能包含字母、数字、连字符、下划线，或 `任务id|实例键` 形式的两段式 id")
 	}
 
 	kind := ""
@@ -219,6 +220,10 @@ func validateIncoming(raw []byte, knownDevices map[string]bool) (*incomingRecord
 			return nil, E.BadRequest("记录 " + id + " 的向量时钟分量 " + dev +
 				" 必须写成十进制整数，不支持科学计数法或字符串")
 		}
+		if dev != authDeviceID && uint64(n) > serverClocks[dev] {
+			return nil, E.BadRequest("记录 " + id + " 的向量时钟分量 " + dev +
+				" 超过了服务端已知值，不能替其它设备推进时钟")
+		}
 	}
 	vc := vcNormalizeRaw(vcMap)
 	if len(vc) == 0 {
@@ -277,10 +282,26 @@ func validateIncoming(raw []byte, knownDevices map[string]bool) (*incomingRecord
 	}, nil
 }
 
-// reRecordID 记录 id 的白名单：字母、数字、连字符、下划线。
-// 时钟比记录本身更需要稳定的字符集，但 id 会被回吐给所有设备并进入导出文件，
-// 因此同样收紧。
-var reRecordID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+// reRecordID 记录 id 的白名单。两条分支，对应两类 id：
+//
+//  1. 单段 id —— 字母、数字、连字符、下划线（上限 128 字符）。
+//     客户端生成的任务/偏好 id 走这条：`uuid()` 的 RFC4122 形态、
+//     `shortId()` 的 `t_xxxx` 形态都落在这里。
+//
+//  2. 两段式 id —— `前缀|后缀`，前后各自收紧、整体仍受 128 字符约束。
+//     完成打卡记录用 `taskId|实例键`（见 shared/recurrence.js 的
+//     occurrenceCompletionId）。这个复合形态是**功能性的**：多端同时勾选
+//     同一天必须算出同一条记录，否则会各写一条、打卡状态互相看不见。
+//
+//     最早这里只有单段分支，结果所有含竖线的 completion id 一律被拒 ——
+//     而客户端本地照样写库、界面照样显示"已打卡"，只有同步静默失败。
+//     最后一位服务端确认过的任务打卡就成了永远推不上去的孤岛。
+//
+// 两段分支的前缀沿用单段字符集（它本来就是 taskId），后缀是日期或
+// 本地时间戳，故允许 ':'、'+'、'.'。整体仍排除空白、控制字符、ANSI 转义、
+// 引号、反斜杠与 '/' —— 这正是当初收紧字符集的理由，必须保留。
+var reRecordID = regexp.MustCompile(
+	`^(?:[A-Za-z0-9_-]{1,128}|[A-Za-z0-9_-]{1,128}\|[A-Za-z0-9:+.TZ_-]{1,64})$`)
 
 // isPlainIntegerLiteral 判断一个已解码的 JSON 值是否是"普通十进制整数"字面量：
 // json.Number 且只含数字（允许前导 -）。科学计数法（1e19）、带小数点（1.0）、
@@ -368,10 +389,11 @@ type applyPushResult struct {
 
 // loadKnownDevices 载入服务端认可的设备标识集合。
 //
-// 向量时钟的设备键是客户端申报的，而 device_clocks 表没有外键约束 ——
-// 不校验就等于允许任意字符串凭空造出时钟行（幽灵设备），污染全局版本向量。
+// devices 是当前仍可管理/登录的设备；device_clocks 是历史时钟注册表。
+// 忘记设备只删除 devices 行，不删除时钟行，否则它参与过的记录会永久无法推送。
+// 两者取并集，既挡掉凭空捏造的幽灵设备，又不丢历史因果信息。
 func loadKnownDevices(q rowQuerier) (map[string]bool, error) {
-	rows, err := q.Query("SELECT id FROM devices")
+	rows, err := q.Query("SELECT id FROM devices UNION SELECT device_id FROM device_clocks")
 	if err != nil {
 		return nil, err
 	}
@@ -383,6 +405,31 @@ func loadKnownDevices(q rowQuerier) (map[string]bool, error) {
 			return nil, err
 		}
 		out[id] = true
+	}
+	return out, rows.Err()
+}
+
+// loadDeviceClocks 载入服务端权威设备时钟。
+//
+// 客户端只能在向量时钟里推进自己的分量；其它设备的分量必须来自服务端已经
+// 接受过的历史值。否则一台已认证设备可以把别的设备推到 MaxVcCounter，
+// 让它之后的本地修改永远无法形成新的因果版本。
+func loadDeviceClocks(q rowQuerier) (map[string]uint64, error) {
+	rows, err := q.Query("SELECT device_id, counter FROM device_clocks")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]uint64{}
+	for rows.Next() {
+		var id string
+		var counter int64
+		if err := rows.Scan(&id, &counter); err != nil {
+			return nil, err
+		}
+		if counter > 0 {
+			out[id] = uint64(counter)
+		}
 	}
 	return out, rows.Err()
 }
@@ -402,9 +449,13 @@ func applyPush(tx *sql.Tx, deviceID string, pushList []json.RawMessage) (*applyP
 	if err != nil {
 		return nil, internalErr(err)
 	}
+	serverClocks, err := loadDeviceClocks(tx)
+	if err != nil {
+		return nil, internalErr(err)
+	}
 
 	for _, raw := range pushList {
-		inc, apiErr := validateIncoming(raw, knownDevices)
+		inc, apiErr := validateIncoming(raw, knownDevices, deviceID, serverClocks)
 		if apiErr != nil {
 			return nil, apiErr
 		}

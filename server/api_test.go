@@ -165,14 +165,16 @@ func (inst *instance) loginSimple(t *testing.T) *apiResponse {
 // 向量时钟的设备键必须对应真实登记过的设备（否则任意字符串都能凭空造出
 // device_clocks 行，污染全局版本向量），所以"以另一台设备的名义写时钟"
 // 这类用例必须先把那台设备登录出来。
-func (inst *instance) registerDevice(t *testing.T, deviceID, name string) {
+func (inst *instance) registerDevice(t *testing.T, deviceID, name string) string {
 	t.Helper()
 	prev := inst.jars["default"]
 	res := inst.login(t, map[string]string{"deviceId": deviceID, "deviceName": name})
 	if res.status != 200 {
 		t.Fatalf("登记设备 %s 失败: %d %s", deviceID, res.status, res.text)
 	}
+	cookie := inst.jars["default"]
 	inst.jars["default"] = prev
+	return cookie
 }
 
 // rec 构造一条合法的入站记录。
@@ -491,11 +493,14 @@ func TestSyncProtocol(t *testing.T) {
 
 	t.Run("并发冲突：按墙钟决胜，且合并后的向量时钟同时支配双方", func(t *testing.T) {
 		inst := loggedIn(t)
-		inst.registerDevice(t, "device-B-0002", "B 的手机")
+		cookieA := inst.jars["default"]
+		cookieB := inst.registerDevice(t, "device-B-0002", "B 的手机")
 		inst.call(t, "POST", "/api/sync",
 			syncBody("device-A-0001", 0, []map[string]any{rec("task-1", map[string]any{"device-A-0001": 1}, map[string]any{"title": "A 的版本"}, 1000, nil)}), nil)
+		inst.jars["default"] = cookieB
 		r := inst.call(t, "POST", "/api/sync",
-			syncBody("device-A-0001", 0, []map[string]any{rec("task-1", map[string]any{"device-B-0002": 1}, map[string]any{"title": "B 的版本"}, 5000, nil)}), nil)
+			syncBody("device-B-0002", 0, []map[string]any{rec("task-1", map[string]any{"device-B-0002": 1}, map[string]any{"title": "B 的版本"}, 5000, nil)}), nil)
+		inst.jars["default"] = cookieA
 		if r.json["applied"].([]any)[0].(map[string]any)["status"] != "conflict:client-won" {
 			t.Fatal("应 conflict:client-won")
 		}
@@ -523,11 +528,14 @@ func TestSyncProtocol(t *testing.T) {
 
 	t.Run("冲突只判定一次：输家重推被判 stale 而非再次冲突（防乒乓）", func(t *testing.T) {
 		inst := loggedIn(t)
-		inst.registerDevice(t, "device-B-0002", "B 的手机")
+		cookieA := inst.jars["default"]
+		cookieB := inst.registerDevice(t, "device-B-0002", "B 的手机")
 		original := rec("task-1", map[string]any{"device-A-0001": 1}, map[string]any{"title": "A 的版本"}, 1000, nil)
 		inst.call(t, "POST", "/api/sync", syncBody("device-A-0001", 0, []map[string]any{original}), nil)
+		inst.jars["default"] = cookieB
 		inst.call(t, "POST", "/api/sync",
-			syncBody("device-A-0001", 0, []map[string]any{rec("task-1", map[string]any{"device-B-0002": 1}, map[string]any{"title": "B 的版本"}, 5000, nil)}), nil)
+			syncBody("device-B-0002", 0, []map[string]any{rec("task-1", map[string]any{"device-B-0002": 1}, map[string]any{"title": "B 的版本"}, 5000, nil)}), nil)
+		inst.jars["default"] = cookieA
 		again := inst.call(t, "POST", "/api/sync", syncBody("device-A-0001", 0, []map[string]any{original}), nil)
 		if again.json["applied"].([]any)[0].(map[string]any)["status"] != "stale" {
 			t.Fatal("若仍判为并发，两端会无限互相覆盖，永远收敛不了")
@@ -550,11 +558,14 @@ func TestSyncProtocol(t *testing.T) {
 
 	t.Run("冲突赢家也要收到纠正，用来采纳合并后的向量时钟（省一个来回）", func(t *testing.T) {
 		inst := loggedIn(t)
-		inst.registerDevice(t, "device-B-0002", "B 的手机")
+		cookieA := inst.jars["default"]
+		cookieB := inst.registerDevice(t, "device-B-0002", "B 的手机")
 		inst.call(t, "POST", "/api/sync",
 			syncBody("device-A-0001", 0, []map[string]any{rec("task-1", map[string]any{"device-A-0001": 1}, map[string]any{"title": "A"}, 1000, nil)}), nil)
+		inst.jars["default"] = cookieB
 		res := inst.call(t, "POST", "/api/sync",
-			syncBody("device-A-0001", 0, []map[string]any{rec("task-1", map[string]any{"device-B-0002": 1}, map[string]any{"title": "B"}, 5000, nil)}), nil)
+			syncBody("device-B-0002", 0, []map[string]any{rec("task-1", map[string]any{"device-B-0002": 1}, map[string]any{"title": "B"}, 5000, nil)}), nil)
+		inst.jars["default"] = cookieA
 		if res.json["applied"].([]any)[0].(map[string]any)["status"] != "conflict:client-won" {
 			t.Fatal("应 conflict:client-won")
 		}
@@ -680,14 +691,15 @@ func TestSyncProtocol(t *testing.T) {
 
 	t.Run("多设备各推各的：服务端全局向量包含所有设备分量", func(t *testing.T) {
 		inst := loggedIn(t)
-		inst.registerDevice(t, "device-B-0002", "B 的手机")
+		cookieA := inst.jars["default"]
+		cookieB := inst.registerDevice(t, "device-B-0002", "B 的手机")
 		inst.call(t, "POST", "/api/sync",
 			syncBody("device-A-0001", 0, []map[string]any{rec("task-a", map[string]any{"device-A-0001": 3}, map[string]any{"title": "a"}, 1000, nil)}), nil)
 		// B 以自己的身份推一条，证明两台设备的分量各自成立
-		bCookie := inst.jars["default"]
+		inst.jars["default"] = cookieB
 		inst.call(t, "POST", "/api/sync",
-			syncBody("device-A-0001", 0, []map[string]any{rec("task-b", map[string]any{"device-A-0001": 3, "device-B-0002": 7}, map[string]any{"title": "b"}, 2000, nil)}), nil)
-		inst.jars["default"] = bCookie
+			syncBody("device-B-0002", 0, []map[string]any{rec("task-b", map[string]any{"device-B-0002": 7}, map[string]any{"title": "b"}, 2000, nil)}), nil)
+		inst.jars["default"] = cookieA
 		v := inst.call(t, "GET", "/api/sync/vector", nil, nil)
 		sv := v.json["serverVector"].(map[string]any)
 		if sv["device-A-0001"] != float64(3) || sv["device-B-0002"] != float64(7) {

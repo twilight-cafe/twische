@@ -19,7 +19,7 @@
   cursor: default;
 }
 
-.syncer__icon {
+.syncer .ic {
   flex: none;
   display: grid;
   place-items: center;
@@ -31,16 +31,16 @@
   white-space: nowrap;
 }
 
-.syncer[data-tone='ok'] .syncer__icon {
+.syncer[data-tone='ok'] .syncer .ic {
   color: var(--ok);
 }
-.syncer[data-tone='warn'] .syncer__icon {
+.syncer[data-tone='warn'] .syncer .ic {
   color: var(--dusk);
 }
-.syncer[data-tone='error'] .syncer__icon {
+.syncer[data-tone='error'] .syncer .ic {
   color: var(--dusk);
 }
-.syncer[data-tone='busy'] .syncer__icon {
+.syncer[data-tone='busy'] .syncer .ic {
   color: var(--fg);
   animation: syncer-spin 1s linear infinite;
 }

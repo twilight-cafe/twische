@@ -1,6 +1,6 @@
 {
   "name": "twische",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "private": true,
   "description": "Twische — 一个自托管的日程管理工具（Web + PWA），支持固定重复时段与精确截止时间，多端向量时钟同步。",
   "type": "module",

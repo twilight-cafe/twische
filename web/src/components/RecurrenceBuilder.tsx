@@ -13,6 +13,7 @@
  *    极常见的需求变得无法表达。
  */
 import { useMemo, useState } from 'react';
+import { Chip, InputNumber, SegmentedControl, Tag } from 'ink-design';
 import { describeRecurrence, daysInMonth, parseDateKey, isoWeekday } from '@shared/recurrence.js';
 import type { Recurrence } from '@/lib/types';
 import {
@@ -226,19 +227,11 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
       {/* ── 频率 ── */}
       <div className="rb__row">
         <span className="label">重复</span>
-        <div className="seg">
-          {FREQS.map((f) => (
-            <button
-              key={f.value}
-              className={`seg__item${rule.freq === f.value ? ' is-on' : ''}`}
-              type="button"
-              aria-pressed={rule.freq === f.value}
-              onClick={() => patch({ freq: f.value })}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          value={rule.freq}
+          onChange={(value) => patch({ freq: value as Recurrence['freq'] })}
+          options={FREQS.map((f) => ({ value: f.value, label: f.label }))}
+        />
       </div>
 
       {/* ── 间隔 ── */}
@@ -246,35 +239,14 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
         <span className="label">间隔</span>
         <div className="rb__inline">
           <span className="mut">每</span>
-          <div className="stepper">
-            <button
-              className="stepper__btn"
-              type="button"
-              aria-label="减少间隔"
-              disabled={rule.interval <= 1}
-              onClick={() => setIntervalValue(rule.interval - 1)}
-            >
-              <Icon name="minus" size={14} />
-            </button>
-            <input
-              type="number"
-              min={1}
-              max={99}
-              inputMode="numeric"
-              aria-label="间隔数量"
-              value={rule.interval}
-              onChange={(e) => setIntervalValue(Number(e.target.value))}
-            />
-            <button
-              className="stepper__btn"
-              type="button"
-              aria-label="增加间隔"
-              disabled={rule.interval >= 99}
-              onClick={() => setIntervalValue(rule.interval + 1)}
-            >
-              <Icon name="plus" size={14} />
-            </button>
-          </div>
+          <InputNumber
+            className="rb__number"
+            aria-label="间隔数量"
+            min={1}
+            max={99}
+            value={rule.interval}
+            onChange={(v) => setIntervalValue(v ?? 1)}
+          />
           <span className="mut">{INTERVAL_UNIT[rule.freq]}</span>
         </div>
       </div>
@@ -286,37 +258,22 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
           <div>
             <div className="rb__weekdays">
               {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                <button
+                <Chip
                   key={d}
                   className={`wd${rule.byWeekday.includes(d) ? ' is-on' : ''}`}
-                  type="button"
                   title={WEEKDAY_FULL[d]}
                   aria-label={WEEKDAY_FULL[d]}
                   aria-pressed={rule.byWeekday.includes(d)}
                   onClick={() => toggleWeekday(d)}
                 >
                   {WEEKDAY_SHORT[d]}
-                </button>
+                </Chip>
               ))}
             </div>
             <div className="rb__quick">
-              <button
-                className="chip chip--btn"
-                type="button"
-                onClick={() => patch({ byWeekday: [...WORKDAYS] })}
-              >
-                工作日
-              </button>
-              <button className="chip chip--btn" type="button" onClick={() => patch({ byWeekday: [6, 7] })}>
-                周末
-              </button>
-              <button
-                className="chip chip--btn"
-                type="button"
-                onClick={() => patch({ byWeekday: [1, 2, 3, 4, 5, 6, 7] })}
-              >
-                每天
-              </button>
+              <Chip onClick={() => patch({ byWeekday: [...WORKDAYS] })}>工作日</Chip>
+              <Chip onClick={() => patch({ byWeekday: [6, 7] })}>周末</Chip>
+              <Chip onClick={() => patch({ byWeekday: [1, 2, 3, 4, 5, 6, 7] })}>每天</Chip>
               {isWorkdays && <span className="rb__tag">已是工作日</span>}
             </div>
           </div>
@@ -328,24 +285,15 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
         <>
           <div className="rb__row">
             <span className="label">方式</span>
-            <div className="seg seg--sm">
-              <button
-                className={`seg__item${monthMode === 'day' ? ' is-on' : ''}`}
-                type="button"
-                aria-pressed={monthMode === 'day'}
-                onClick={() => setMonthMode('day')}
-              >
-                按日期
-              </button>
-              <button
-                className={`seg__item${monthMode === 'nth' ? ' is-on' : ''}`}
-                type="button"
-                aria-pressed={monthMode === 'nth'}
-                onClick={() => setMonthMode('nth')}
-              >
-                按星期
-              </button>
-            </div>
+            <SegmentedControl
+              className="seg--sm"
+              value={monthMode}
+              onChange={(value) => setMonthMode(value as 'day' | 'nth')}
+              options={[
+                { value: 'day', label: '按日期' },
+                { value: 'nth', label: '按星期' },
+              ]}
+            />
           </div>
 
           {monthMode === 'day' ? (
@@ -355,15 +303,14 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
                 <div className="rb__days">
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31].map(
                     (d) => (
-                      <button
+                      <Chip
                         key={d}
                         className={`cell${rule.byMonthday.includes(d) ? ' is-on' : ''}${d > 28 ? ' cell--mute' : ''}`}
-                        type="button"
                         aria-pressed={rule.byMonthday.includes(d)}
                         onClick={() => toggleMonthday(d)}
                       >
                         {d}
-                      </button>
+                      </Chip>
                     ),
                   )}
                 </div>
@@ -382,15 +329,14 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
                 <span className="label">第几个</span>
                 <div className="rb__quick rb__quick--flat">
                   {ORDINALS.map((o) => (
-                    <button
+                    <Chip
                       key={o.value}
-                      className={`chip chip--btn${nthOrdinal === o.value ? ' is-on' : ''}`}
-                      type="button"
+                      className={nthOrdinal === o.value ? 'is-on' : undefined}
                       aria-pressed={nthOrdinal === o.value}
                       onClick={() => setNth(o.value, nthWeekday)}
                     >
                       {o.label}
-                    </button>
+                    </Chip>
                   ))}
                 </div>
               </div>
@@ -398,17 +344,16 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
                 <span className="label">星期</span>
                 <div className="rb__weekdays">
                   {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                    <button
+                    <Chip
                       key={d}
                       className={`wd${nthWeekday === d ? ' is-on' : ''}`}
-                      type="button"
                       title={WEEKDAY_FULL[d]}
                       aria-label={WEEKDAY_FULL[d]}
                       aria-pressed={nthWeekday === d}
                       onClick={() => setNth(nthOrdinal, d)}
                     >
                       {WEEKDAY_SHORT[d]}
-                    </button>
+                    </Chip>
                   ))}
                 </div>
               </div>
@@ -424,15 +369,14 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
             <span className="label">月份</span>
             <div className="rb__months">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
-                <button
+                <Chip
                   key={m}
                   className={`cell${rule.byMonth.includes(m) ? ' is-on' : ''}`}
-                  type="button"
                   aria-pressed={rule.byMonth.includes(m)}
                   onClick={() => toggleMonth(m)}
                 >
                   {m}
-                </button>
+                </Chip>
               ))}
             </div>
           </div>
@@ -442,15 +386,14 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
               <div className="rb__days">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31].map(
                   (d) => (
-                    <button
+                    <Chip
                       key={d}
                       className={`cell${rule.byMonthday.includes(d) ? ' is-on' : ''}${d > 28 ? ' cell--mute' : ''}`}
-                      type="button"
                       aria-pressed={rule.byMonthday.includes(d)}
                       onClick={() => toggleMonthday(d)}
                     >
                       {d}
-                    </button>
+                    </Chip>
                   ),
                 )}
               </div>
@@ -489,14 +432,13 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
 
           <div className="rb__quick rb__quick--flat">
             {DURATION_PRESETS.map((p) => (
-              <button
+              <Chip
                 key={p.min}
-                className={`chip chip--btn${duration === p.min && !allDayLike ? ' is-on' : ''}`}
-                type="button"
+                className={duration === p.min && !allDayLike ? 'is-on' : undefined}
                 onClick={() => setDuration(p.min)}
               >
                 {p.label}
-              </button>
+              </Chip>
             ))}
             {spansMidnight ? (
               <span className="rb__tag rb__tag--dusk">
@@ -527,32 +469,16 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
       <div className="rb__row rb__row--top">
         <span className="label">结束</span>
         <div className="rb__stack">
-          <div className="seg seg--sm">
-            <button
-              className={`seg__item${endMode === 'never' ? ' is-on' : ''}`}
-              type="button"
-              aria-pressed={endMode === 'never'}
-              onClick={() => setEndMode('never')}
-            >
-              不限
-            </button>
-            <button
-              className={`seg__item${endMode === 'until' ? ' is-on' : ''}`}
-              type="button"
-              aria-pressed={endMode === 'until'}
-              onClick={() => setEndMode('until')}
-            >
-              到某天
-            </button>
-            <button
-              className={`seg__item${endMode === 'count' ? ' is-on' : ''}`}
-              type="button"
-              aria-pressed={endMode === 'count'}
-              onClick={() => setEndMode('count')}
-            >
-              共几次
-            </button>
-          </div>
+          <SegmentedControl
+            className="seg--sm"
+            value={endMode}
+            onChange={(value) => setEndMode(value as 'never' | 'until' | 'count')}
+            options={[
+              { value: 'never', label: '不限' },
+              { value: 'until', label: '到某天' },
+              { value: 'count', label: '共几次' },
+            ]}
+          />
 
           {endMode === 'until' && (
             <div className="rb__end-extra">
@@ -567,35 +493,14 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
 
           {endMode === 'count' && (
             <div className="rb__inline rb__end-extra">
-              <div className="stepper">
-                <button
-                  className="stepper__btn"
-                  type="button"
-                  aria-label="减少次数"
-                  disabled={(rule.count || 1) <= 1}
-                  onClick={() => setCount((rule.count || 1) - 1)}
-                >
-                  <Icon name="minus" size={14} />
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  max={999}
-                  inputMode="numeric"
-                  aria-label="发生次数"
-                  value={rule.count || 1}
-                  onChange={(e) => setCount(Number(e.target.value))}
-                />
-                <button
-                  className="stepper__btn"
-                  type="button"
-                  aria-label="增加次数"
-                  disabled={(rule.count || 1) >= 999}
-                  onClick={() => setCount((rule.count || 1) + 1)}
-                >
-                  <Icon name="plus" size={14} />
-                </button>
-              </div>
+              <InputNumber
+                className="rb__number"
+                aria-label="发生次数"
+                min={1}
+                max={999}
+                value={rule.count || 1}
+                onChange={(v) => setCount(v ?? 1)}
+              />
               <span className="mut">次之后停止</span>
             </div>
           )}
@@ -618,17 +523,9 @@ export default function RecurrenceBuilder({ value: rule, onChange }: RecurrenceB
           {rule.exdates.length > 0 && (
             <div className="rb__exdates">
               {rule.exdates.map((d) => (
-                <span key={d} className="chip">
+                <Tag key={d} closable onClose={() => removeExdate(d)}>
                   {fmtExdate(d)}
-                  <button
-                    className="chip__x"
-                    type="button"
-                    aria-label={`移除 ${d}`}
-                    onClick={() => removeExdate(d)}
-                  >
-                    <Icon name="x" size={11} />
-                  </button>
-                </span>
+                </Tag>
               ))}
             </div>
           )}

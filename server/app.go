@@ -621,11 +621,8 @@ func (s *server) routeAPI(w http.ResponseWriter, r *http.Request, p string) erro
 			tx.Rollback()
 			return internalErr(err)
 		}
-		// 该设备的逻辑计数从全局向量中移除，避免残留分量让判据失真
-		if _, err := tx.Exec("DELETE FROM device_clocks WHERE device_id = ?", deviceID); err != nil {
-			tx.Rollback()
-			return internalErr(err)
-		}
+		// 注意：不能删除 device_clocks。它同时是向量时钟的历史注册表，
+		// 删除后任何引用过该设备的记录都会在后续推送中被判为“未登记设备”。
 		if err := tx.Commit(); err != nil {
 			return internalErr(err)
 		}
@@ -841,11 +838,11 @@ func (s *server) handleExport(w http.ResponseWriter) error {
 		return internalErr(err)
 	}
 	payload := map[string]any{
-		"format":      "twische-export",
-		"version":     1,
-		"exportedAt":  now(),
+		"format":       "twische-export",
+		"version":      1,
+		"exportedAt":   now(),
 		"serverVector": globalVector(s.db),
-		"records":     records,
+		"records":      records,
 	}
 
 	var buf bytes.Buffer

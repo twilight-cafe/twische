@@ -9,6 +9,7 @@ import { state as repo } from '@/lib/localrepo';
 import { formatRelative } from '@/lib/datetime';
 import { useSyncTick } from '@/hooks/useSyncTick';
 import { notify, useUiStore } from '@/stores/ui';
+import { Button } from 'ink-design';
 import Icon from './Icon';
 import './SyncBadge.css';
 
@@ -73,19 +74,17 @@ export function SyncBadge({ compact = false }: SyncBadgeProps) {
   }
 
   return (
-    <button
+    <Button
+      ghost
       className="syncer"
       data-tone={tone}
-      type="button"
       title={`${label}（点击立即同步）`}
       disabled={syncState.running}
       onClick={() => void manualSync()}
+      icon={<Icon name={iconName} size={15} />}
     >
-      <span className="syncer__icon">
-        <Icon name={iconName} size={15} />
-      </span>
       {!compact && <span className="syncer__label">{label}</span>}
-    </button>
+    </Button>
   );
 }
 

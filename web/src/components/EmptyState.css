@@ -1,17 +1,19 @@
-.empty {
+.empty.empty-state {
   display: grid;
   justify-items: center;
   gap: 8px;
   padding: 48px 20px;
   text-align: center;
+  color: inherit;
+  font-size: inherit;
 }
 
-.empty--compact {
+.empty.empty-state--compact {
   padding: 24px 12px;
   gap: 6px;
 }
 
-.empty__icon {
+.empty-state__icon {
   display: grid;
   place-items: center;
   width: 46px;
@@ -22,29 +24,37 @@
   color: var(--faint);
 }
 
-.empty--compact .empty__icon {
+.empty-state--compact .empty-state__icon {
   width: 34px;
   height: 34px;
   margin-bottom: 0;
 }
 
-.empty__title {
+.empty-state__title {
   font-family: var(--serif);
   font-weight: 900;
   font-size: 16px;
 }
 
-.empty--compact .empty__title {
+.empty-state--compact .empty-state__title {
   font-size: 14px;
 }
 
-.empty__hint {
+.empty-state__hint {
   max-width: 32ch;
   font-size: 13px;
   line-height: 1.7;
   color: var(--faint);
 }
 
-.empty__action {
+.empty-state__action {
   margin-top: 8px;
+}
+
+/* InkUI Empty 自带一个虚线占位框；这里只用应用侧的圆形图标。 */
+.empty.empty-state .empty-image {
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
 }

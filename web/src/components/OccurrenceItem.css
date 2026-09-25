@@ -1,6 +1,6 @@
 .oi {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto 1fr;
   align-items: start;
   gap: 0 10px;
   padding: 9px 10px 9px 8px;
@@ -28,8 +28,10 @@
   place-items: center;
   width: 18px;
   height: 18px;
+  padding: 0;
   margin-top: 1px;
   border: 1.5px solid var(--line-strong);
+  background: transparent;
   border-radius: 50%;
   color: var(--on-acc);
   transition: border-color 0.14s var(--ease), background 0.14s var(--ease);
@@ -47,30 +49,9 @@
   margin-top: 0;
 }
 
-/* 形状区分：固定时段是实心竖条，截止时间是圆点 */
-.oi__rule {
-  grid-row: 1 / -1;
-  width: 3px;
-  height: 100%;
-  min-height: 18px;
-  margin-top: 1px;
-  border-radius: 2px;
-  background: var(--fg);
-}
-.oi[data-kind='deadline'] .oi__rule {
-  width: 7px;
-  border-radius: 50%;
-  background: transparent;
-  border: 1.5px solid var(--fg);
-  justify-self: center;
-}
-.oi.is-done .oi__rule {
-  opacity: 0.35;
-}
-.oi--compact .oi__rule {
-  width: 2px;
-  min-height: 12px;
-}
+/* 形状区分（实心竖条 / 空心圆点）已从本条目中移除：
+   它与打卡圆圈同处一列且无图例承接，读者无法据此推断类型，
+   而 .oi__time 的文字已完整承载该信息。有图例的场景见 WeekView 的 .legend。 */
 
 .oi__body {
   min-width: 0;
