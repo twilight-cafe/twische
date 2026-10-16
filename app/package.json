@@ -1,0 +1,21 @@
+{
+  "name": "twische-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Twische 安卓外壳：把静态页面装进 WebView，并提供状态栏常驻通知的前台服务。",
+  "scripts": {
+    "build:debug": "cd android && ./gradlew assembleDebug",
+    "build:release": "cd android && ./gradlew assembleRelease",
+    "check:browser": "node scripts/browser-check.mjs",
+    "open": "cap open android",
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "playwright-core": "^1.56.0"
+  }
+}

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Twische</string>
+    <string name="title_activity_main">Twische</string>
+    <string name="package_name">cn.twilightcafe.twische</string>
+    <string name="custom_url_scheme">cn.twilightcafe.twische</string>
+</resources>

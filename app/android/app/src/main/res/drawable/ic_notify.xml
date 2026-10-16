@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  状态栏通知图标。
+  Android 只取 alpha 通道：这里的白色会被系统按主题重新着色，
+  因此不能有底色、也不能用彩色 —— 彩色图标在状态栏上会变成一块灰斑。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 日历外框 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5,3h14a2,2 0 0 1 2,2v15a2,2 0 0 1 -2,2H5a2,2 0 0 1 -2,-2V5a2,2 0 0 1 2,-2zM5,5v15h14V5z" />
+    <!-- 顶部标题栏 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,8.5h18v2H3z" />
+    <!-- 左侧挂环 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7,1.5h2v4H7zM15,1.5h2v4h-2z" />
+    <!-- 勾选标记：与"已完成"的语义一致 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M7.2,14.6l1.5,-1.5 1.9,1.9 4.7,-4.7 1.5,1.5 -6.2,6.2z" />
+</vector>

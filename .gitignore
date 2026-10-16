@@ -1,32 +1,81 @@
+# ───────────────────────── 依赖 ─────────────────────────
 node_modules/
-dist/
-*.log
-.DS_Store
 
-# 运行期数据：SQLite 数据库与 WAL 附属文件绝不入库
+# ───────────────────────── 构建产物 ─────────────────────────
+# 网页构建产物。历史上从未入库过（见 git log -- dist 为空），
+# 也永远不该入库：里面有带内容哈希的文件名，提交进来只会制造噪音与冲突。
+dist/
+coverage/
+
+# 安卓壳的构建输出。Capacitor 生成的 web 资源同样是构建产物，
+# cap sync 时会重新拷贝，因此不入库 —— 跟着 README 的三步走就能重新产出。
+app/dist/
+app/android/build/
+app/android/app/build/
+app/android/.gradle/
+app/android/capacitor-cordova-android-plugins/
+app/android/app/src/main/assets/public/
+app/android/app/src/main/assets/capacitor.config.json
+app/android/app/src/main/assets/capacitor.plugins.json
+
+# APK 与其它打包产物
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+release/
+
+# 原生构建中间物
+app/android/.externalNativeBuild/
+app/android/.cxx/
+*.hprof
+captures/
+
+# ───────────────────────── 签名与本地配置 ─────────────────────────
+# release 签名密钥：丢了无法覆盖升级，泄露了别人能冒充你发版。绝不入库。
+*.jks
+*.keystore
+app/android/keystore.properties
+# 本机 SDK 路径，每台机器都不同
+app/android/local.properties
+
+# 本地环境覆盖
+.env
+.env.local
+
+# ───────────────────────── 运行期数据 ─────────────────────────
+# 日程数据只存在用户自己的 WebDAV 上；本机出现的数据库只可能是调试残留。
 data/
 *.db
 *.db-shm
 *.db-wal
 *.db-journal
-.backup/
-.gocache
-.gotmp
-.shots
+*.sqlite
+*.sqlite3
+backups/
+logs/
 
-# 本地环境覆盖
-.env
-.env.local
+# ───────────────────────── 临时文件 ─────────────────────────
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
 *.exe
+.DS_Store
+Thumbs.db
 
-# 构建产物
-release/
+# ───────────────────────── 编辑器与 IDE ─────────────────────────
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
 
-# 构建产物
-release/
-
-
-# --- AI Agent 工作目录 ---
+# ───────────────────────── AI Agent 工作目录 ─────────────────────────
+# 与 v1 保持同一份清单：这些目录里会落大量中间产物，不该混进提交。
 .workbuddy/
 .claude/
 .codebuddy/
@@ -38,3 +87,4 @@ release/
 .windsurf/
 .continue/
 .serena/
+.dsh/

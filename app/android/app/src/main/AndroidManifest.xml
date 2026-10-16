@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Permissions：必须排在 <application> 之前（lint: ManifestOrder） -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ 的通知权限；拒绝后应用照常可用，只是不会有状态栏提醒 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 14+ 要求前台服务声明与类型匹配的权限（与 service 的 specialUse 对应） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity>
+
+        <!--
+            状态栏常驻通知的前台服务。
+            exported="false"：只有本应用能启动它。
+            stopWithTask="false"：从最近任务里划掉应用时**不要**顺手撤掉通知 ——
+            用户划掉的是界面，不是"我还有几件事没做"这个事实。
+
+            foregroundServiceType 选 specialUse 而不是 dataSync，有两个硬理由：
+              1. Android 15 起，BOOT_COMPLETED 广播**不允许**启动 dataSync 类型的前台服务
+                 （AOSP 的 FGS_BOOT_COMPLETED_ALLOWLIST 里没有 dataSync），
+                 开机恢复通知会直接抛异常；specialUse 在白名单内。
+              2. Android 15 起 dataSync 在后台累计满 6 小时会被系统判超时，
+                 而本服务的常态就是"一直挂着"，必然撞上那次崩溃；specialUse 不受时长约束。
+            代价：若上架 Google Play 需要说明用途；自签名侧载不受影响。
+        -->
+        <service
+            android:name=".NotifyService"
+            android:enabled="true"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="persistent_status_bar_reminder" />
+        </service>
+
+        <!-- 开机后把常驻通知补回来 -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+</manifest>

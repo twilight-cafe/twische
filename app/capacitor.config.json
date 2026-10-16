@@ -1,0 +1,13 @@
+{
+  "appId": "cn.twilightcafe.twische",
+  "appName": "Twische",
+  "webDir": "../dist",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

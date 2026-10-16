@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover 让刘海屏/灵动岛区域可用，配合 env(safe-area-inset-*) 使用 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Twische · 日程</title>
+    <meta name="description" content="Twische —— 纯静态的日程管理工具，数据存在你自己的 WebDAV 服务器上。固定时段的重复安排与精确到分钟的截止任务，多端向量时钟同步。" />
+
+    <!-- 主题色随系统，让浏览器 UI 与页面融为一体 -->
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)" />
+
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Twische" />
+    <!-- default 而非 black-translucent：后者会与我们的浅色底冲突 -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!--
+      主题必须在首屏绘制之前定下来，否则会闪一下白（或黑）。
+      放外部文件而非内联脚本：静态托管方通常会开 CSP，内联脚本会被直接拦掉。
+      路径一律用相对形式，这样部署在子路径（GitHub Pages / 对象存储前缀）下也能用。
+    -->
+    <script src="./theme-boot.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>
+      <div style="max-width: 34rem; margin: 12vh auto; padding: 0 24px; line-height: 1.8">
+        <h1 style="font-size: 28px">Twische 需要 JavaScript</h1>
+        <p>这是一个纯客户端渲染的日程应用，日程数据在你的浏览器里展开与计算。</p>
+        <p>数据保存在你自己的 WebDAV 服务器上，不经过任何第三方。</p>
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
